@@ -64,16 +64,17 @@ function forSegments(v: View, f: number, segW: number, cb: (i: number, x0: numbe
   for (let i = Math.floor(left / segW); i <= Math.ceil(right / segW); i++) cb(i, i * segW);
 }
 
-/** A sub-view for a layer further from the camera: smaller and with its base higher up the screen. */
-function layer(v: View, scale: number, baseLift: number): View {
-  return { ...v, ppm: v.ppm * scale, groundY: v.groundY - baseLift * v.ppm };
+/** A sub-view for things standing against the back wall: same scale and same scroll speed
+ *  as the world (so no parallax), just with their base a little higher up the screen. */
+function layer(v: View, baseLift: number): View {
+  return { ...v, groundY: v.groundY - baseLift * v.ppm };
 }
 
 export const WALL_LIFT = 0.35; // the back wall meets the floor this far "behind" the plane's flight line
 
 export function drawBackground(v: View) {
   const { ctx, w } = v;
-  const wall = layer(v, 0.9, WALL_LIFT);
+  const wall = layer(v, WALL_LIFT);
   const ceilY = sy(v, WORLD.ceiling);
 
   // wall
@@ -90,12 +91,15 @@ export function drawBackground(v: View) {
 
   drawWallItems(wall);
   drawFloor(v, wall);
-  drawFloorItems(layer(v, 0.95, 0.18));
+  drawFloorItems(layer(v, 0.18));
   drawCeilingLights(v);
 }
 
 // --- wall layer: doors, windows, notice boards (parallax 0.8, it's further away) ---
-const WALL_F = 0.8;
+// Everything physically in the corridor scrolls 1:1 with the camera (no parallax).
+const WALL_F = 1;
+const SKY_F = 0.03; // distant skyline through the windows barely moves
+const CLOUD_F = 0.015;
 const WALL_SEG = 3.2;
 
 function drawWallItems(v: View) {
@@ -135,17 +139,26 @@ function drawWallItems(v: View) {
       ctx.save();
       rr(ctx, X(cx - ww / 2), Y(wy + wh), ww * ppm, wh * ppm, 4);
       ctx.clip();
-      // sky + distant city skyline, much slower parallax so it feels far away
-      ctx.fillStyle = C.sky; ctx.fillRect(X(cx - ww / 2), Y(wy + wh), ww * ppm, wh * ppm);
+      // Sky + distant city skyline. Everything in the corridor moves 1:1 with the camera;
+      // only this far-off view parallaxes, so it is laid out in (almost fixed) screen space
+      // and simply revealed through whichever window is passing.
+      const wx0 = X(cx - ww / 2), wx1 = X(cx + ww / 2);
+      ctx.fillStyle = C.sky; ctx.fillRect(wx0, Y(wy + wh), ww * ppm, wh * ppm);
+      const cloudOff = v.camX * ppm * CLOUD_F, cloudP = 2.6 * ppm;
       ctx.fillStyle = '#ffffff';
-      const cloudX = X(cx) - (v.camX * 0.15 % 3) * ppm * 0.4;
-      ctx.beginPath(); ctx.ellipse(cloudX, Y(wy + wh - 0.25), 0.25 * ppm, 0.08 * ppm, 0, 0, Math.PI * 2); ctx.fill();
-      const skyF = 0.3;
-      for (let k = -4; k <= 4; k++) {
-        const bx = cx + k * 0.42 - ((v.camX * (WALL_F - skyF)) % 0.42);
-        const bh = 0.25 + rand(Math.floor(k + v.camX * (WALL_F - skyF) / 0.42), 7) * 0.55;
-        ctx.fillStyle = k % 2 ? '#7f9bb5' : '#6d87a1';
-        ctx.fillRect(X(bx), Y(wy + bh), 0.36 * ppm, bh * ppm);
+      for (let k = Math.floor((wx0 + cloudOff) / cloudP) - 1; k <= Math.floor((wx1 + cloudOff) / cloudP) + 1; k++) {
+        const cxp = k * cloudP - cloudOff + rand(k, 8) * 1.2 * ppm;
+        const cyp = Y(wy + wh - 0.18 - rand(k, 9) * 0.2);
+        ctx.beginPath(); ctx.ellipse(cxp, cyp, 0.25 * ppm, 0.07 * ppm, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      const skyOff = v.camX * ppm * SKY_F, bw = 0.42 * ppm;
+      for (let k = Math.floor((wx0 + skyOff) / bw) - 1; k <= Math.floor((wx1 + skyOff) / bw) + 1; k++) {
+        const bh = 0.25 + rand(k, 7) * 0.55;
+        const bx = k * bw - skyOff;
+        ctx.fillStyle = rand(k, 10) < 0.5 ? '#7f9bb5' : '#6d87a1';
+        ctx.fillRect(bx, Y(wy + bh), bw * 0.86, bh * ppm);
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        for (let r = 0; r < Math.floor(bh / 0.12); r++) ctx.fillRect(bx + bw * 0.18, Y(wy + bh - 0.06 - r * 0.12), bw * 0.5, 0.03 * ppm);
       }
       ctx.restore();
       rr(ctx, X(cx - ww / 2), Y(wy + wh), ww * ppm, wh * ppm, 4);
@@ -202,7 +215,7 @@ function drawWallItems(v: View) {
 // --- ceiling lights (parallax 0.85) ---
 function drawCeilingLights(v: View) {
   const { ctx, ppm } = v;
-  const f = 0.85;
+  const f = 1;
   forSegments(v, f, 3.6, (i, x0) => {
     const cx = x0 + 1.8;
     const X = sx(v, cx, f);
@@ -267,7 +280,7 @@ function drawFloor(v: View, wall: View) {
 // --- plants and water coolers against the wall (parallax 0.9) ---
 function drawFloorItems(v: View) {
   const { ctx, ppm } = v;
-  const f = 0.9;
+  const f = 1;
   forSegments(v, f, 4.3, (i, x0) => {
     if (i < 1) return; // keep the desk area tidy
     const r = rand(i, 11);

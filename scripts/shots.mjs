@@ -31,7 +31,18 @@ async function throwPlane({ dx, dy, ms, n = 12, shotMid, shotFlight, shotEnd }) 
     if (shotMid && i === Math.round(n * 0.75)) await page.screenshot({ path: shotMid });
   }
   await page.mouse.up();
-  if (shotFlight) { await page.waitForTimeout(1300); await page.screenshot({ path: shotFlight }); }
+  if (shotFlight) {
+    await page.waitForTimeout(1300);
+    await page.screenshot({ path: shotFlight });
+    // two frames a moment apart to show the corridor scrolling 1:1 and the skyline (nearly) still
+    const cam = () => page.evaluate(() => ({ camX: window.__paperPlane.camX, ppm: window.__paperPlane.ppm }));
+    await page.waitForTimeout(200);
+    const a = await cam(); await page.screenshot({ path: `${OUT}/parallax-a.png` });
+    await page.waitForTimeout(220);
+    const b = await cam(); await page.screenshot({ path: `${OUT}/parallax-b.png` });
+    const px = (b.camX - a.camX) * a.ppm;
+    console.log(`parallax frames: camera moved ${(b.camX - a.camX).toFixed(2)} m = ${px.toFixed(0)} CSS px; corridor shifts ${px.toFixed(0)} px, skyline shifts ${(px * 0.03).toFixed(1)} px`);
+  }
   await page.waitForFunction(() => document.querySelector('[data-paper-plane]').dataset.phase === 'landed', null, { timeout: 30000 });
   await page.waitForTimeout(400);
   if (shotEnd) await page.screenshot({ path: shotEnd });

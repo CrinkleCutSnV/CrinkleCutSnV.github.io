@@ -321,5 +321,7 @@ export function initPaperPlane(root: HTMLElement) {
     get phase() { return plane.phase; },
     get distance() { return distanceOf(plane); },
     get lastLaunch() { return lastLaunch; },
+    get camX() { return camX; },
+    get ppm() { return ppm; },
   };
 }
