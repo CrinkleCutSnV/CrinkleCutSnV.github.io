@@ -14,11 +14,11 @@ export const apps: AppCard[] = [
   {
     slug: 'paper-plane',
     title: 'Paper Plane Throw',
-    blurb: 'Fling a paper aeroplane down the office corridor. Drag, let go, and see how far it glides. Coming soon!',
+    blurb: 'Fling a paper aeroplane down the office corridor. Drag, let go, and see how far it glides.',
     emoji: '✈️',
     icon: '/icons/paper-plane.svg',
     colour: '#48cae4',
     tags: ['Game', 'Physics', 'Canvas'],
-    status: 'soon',
+    status: 'new',
   },
 ];

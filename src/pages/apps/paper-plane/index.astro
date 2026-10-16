@@ -1,0 +1,26 @@
+---
+import Base from '../../../layouts/Base.astro';
+import PaperPlaneGame from '../../../components/PaperPlaneGame.astro';
+---
+<Base title="Paper Plane Throw · CrinkleCutSnV's playground" description="Throw a paper aeroplane down an endless office corridor and see how far it glides.">
+  <section class="wrap game-page">
+    <div class="title-row">
+      <h1>Paper Plane Throw ✈️</h1>
+      <a class="back" href="/">← All apps</a>
+    </div>
+    <PaperPlaneGame />
+    <details class="how">
+      <summary>How it works</summary>
+      <p>Drag the plane from the desk towards the right and let go. Your release point sets the launch position, the speed of your flick (and how far you dragged) sets the throw speed, and the direction you were moving sets the angle.</p>
+      <p>In the air, gravity pulls the plane down, air drag slows it, and lift grows with speed, so a fast plane glides and a slow one sinks. The nose follows the flight path with a little lag, which is what gives it that floaty, swoopy feel. Your score is the distance from the front of the desk, in metres.</p>
+    </details>
+  </section>
+</Base>
+<style>
+  .game-page { padding-bottom: 2rem; }
+  .title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin: .25rem 0 1rem; }
+  .back { font-weight: 700; text-decoration: none; }
+  .how { margin-top: 1.5rem; max-width: 70ch; line-height: 1.5; }
+  .how summary { font-weight: 800; cursor: pointer; }
+</style>
