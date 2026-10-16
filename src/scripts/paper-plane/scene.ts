@@ -369,7 +369,7 @@ export function drawDesk(v: View) {
   ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.stroke();
 
   // mug
-  const mx = -0.12;
+  const mx = -1.45; // left of the monitor, clear of the resting plane
   rr(ctx, X(mx - 0.06), Y(top + 0.17), 0.12 * ppm, 0.12 * ppm, 3);
   ctx.fillStyle = '#e63946'; ctx.fill(); ctx.stroke();
   ctx.beginPath(); ctx.arc(X(mx + 0.07), Y(top + 0.11), 0.035 * ppm, -Math.PI / 2, Math.PI / 2); ctx.stroke();

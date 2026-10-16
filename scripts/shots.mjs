@@ -60,6 +60,20 @@ phone.on('pageerror', (e) => errors.push(String(e)));
 await phone.goto(`${BASE}/apps/paper-plane/`);
 await phone.waitForTimeout(800);
 await phone.screenshot({ path: `${OUT}/06-phone.png` });
+// real touch drag via CDP
+{
+  const cdp = await phone.context().newCDPSession(phone);
+  const pb = await phone.locator('[data-paper-plane] canvas').boundingBox();
+  const x0 = pb.x + pb.width * 0.4, y0 = pb.y + pb.height * 0.62;
+  const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+  await touch('touchStart', x0, y0);
+  for (let i = 1; i <= 10; i++) { await touch('touchMove', x0 + 18 * i, y0 - 2 * i); await phone.waitForTimeout(15); if (i === 8) await phone.screenshot({ path: `${OUT}/07-phone-aiming.png` }); }
+  await touch('touchEnd');
+  await phone.waitForFunction(() => document.querySelector('[data-paper-plane]').dataset.phase === 'landed', null, { timeout: 30000 });
+  await phone.waitForTimeout(400);
+  await phone.screenshot({ path: `${OUT}/08-phone-landed.png` });
+  console.log(fmt('touch', await phone.evaluate(() => ({ d: window.__paperPlane.distance, l: window.__paperPlane.lastLaunch }))));
+}
 
 console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors');
 await browser.close();

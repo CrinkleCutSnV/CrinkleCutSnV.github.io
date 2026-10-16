@@ -236,8 +236,8 @@ export function initPaperPlane(root: HTMLElement) {
     }
     const deg = Math.round((l.angle * 180) / Math.PI);
     hud.aim.textContent = `${l.speed.toFixed(1)} m/s · ${deg}°`;
-    hud.aim.style.left = `${(l.x - v.camX) * ppm}px`;
-    hud.aim.style.top = `${groundY - (l.y + 0.35) * ppm}px`;
+    hud.aim.style.top = `${groundY - (l.y + 0.5) * ppm}px`;
+    hud.aim.style.left = `${(l.x - v.camX + 0.1) * ppm}px`;
     hud.aim.classList.remove('is-hidden');
   }
 
