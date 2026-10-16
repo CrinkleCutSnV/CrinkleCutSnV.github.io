@@ -1,0 +1,27 @@
+---
+import Base from '../layouts/Base.astro';
+import AppCardView from '../components/AppCard.astro';
+import { apps } from '../data/apps';
+---
+<Base title="CrinkleCutSnV's playground">
+  <section class="hero wrap">
+    <h1>CrinkleCutSnV's <span class="squiggle">playground</span></h1>
+    <p class="lede">Little web apps and games, made for fun. Have a play, break things, come back for more.</p>
+  </section>
+  <section class="wrap grid" aria-label="Apps">
+    {apps.map((app) => <AppCardView app={app} />)}
+    <div class="card-soon" aria-hidden="true">
+      <span>🧪</span>
+      <p>More experiments<br />coming soon…</p>
+    </div>
+  </section>
+</Base>
+<style>
+  .hero { padding: 2.5rem 0 2rem; }
+  h1 { font-size: clamp(2.2rem, 6vw, 4rem); line-height: 1.05; margin: 0 0 .75rem; letter-spacing: -.02em; }
+  .squiggle { background: linear-gradient(transparent 62%, var(--sun) 62% 92%, transparent 92%); padding: 0 .1em; }
+  .lede { font-size: clamp(1.05rem, 2.2vw, 1.3rem); max-width: 40ch; margin: 0; opacity: .85; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.6rem; padding-bottom: 3rem; }
+  .card-soon { border: 3px dashed rgba(43,45,66,.35); border-radius: var(--radius); display: grid; place-content: center; text-align: center; min-height: 280px; color: rgba(43,45,66,.6); font-weight: 700; }
+  .card-soon span { font-size: 3rem; }
+</style>

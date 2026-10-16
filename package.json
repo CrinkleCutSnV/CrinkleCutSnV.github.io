@@ -1,0 +1,21 @@
+{
+  "name": "crinklecutsnv.github.io",
+  "version": "0.1.0",
+  "description": "CrinkleCutSnV's playground: little web apps and games made for fun.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check:physics": "esbuild scripts/sim.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/sim.mjs --format=esm && node node_modules/.cache/sim.mjs",
+    "shots": "node scripts/shots.mjs"
+  },
+  "dependencies": {
+    "astro": "^5.18.2",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  },
+  "private": true,
+  "type": "module"
+}

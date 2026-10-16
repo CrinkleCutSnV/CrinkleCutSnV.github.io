@@ -1,0 +1,28 @@
+---
+import '../styles/global.css';
+interface Props { title: string; description?: string; wide?: boolean }
+const { title, description = "CrinkleCutSnV's playground: little web apps and games, made for fun.", wide = false } = Astro.props;
+---
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#fffaf0" />
+  </head>
+  <body class={wide ? 'is-wide' : ''}>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="logo" href="/"><span>🥔</span> CrinkleCutSnV</a>
+        <nav><a href="/">All apps</a></nav>
+      </div>
+    </header>
+    <main><slot /></main>
+    <footer class="site-footer">
+      <div class="wrap">Made for fun by <a href="https://github.com/CrinkleCutSnV">CrinkleCutSnV</a>. No cookies, no tracking.</div>
+    </footer>
+  </body>
+</html>

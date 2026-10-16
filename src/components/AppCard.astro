@@ -1,0 +1,46 @@
+---
+import type { AppCard } from '../data/apps';
+interface Props { app: AppCard }
+const { app } = Astro.props;
+---
+{app.status === 'soon' ? (
+<div class="card is-soon" style={`--c:${app.colour}`} aria-label={`${app.title} (coming soon)`}>
+  <div class="art" aria-hidden="true">
+    {app.icon ? <img class="icon" src={app.icon} alt="" width="120" height="90" /> : <span class="emoji">{app.emoji}</span>}
+    <span class="badge">Coming soon</span>
+  </div>
+  <div class="body">
+    <h2>{app.title}</h2>
+    <p>{app.blurb}</p>
+    <ul class="tags">{app.tags.map((t) => <li>{t}</li>)}</ul>
+  </div>
+</div>
+) : (
+<a class="card" href={`/apps/${app.slug}/`} style={`--c:${app.colour}`}>
+  <div class="art" aria-hidden="true">
+    {app.icon ? <img class="icon" src={app.icon} alt="" width="120" height="90" /> : <span class="emoji">{app.emoji}</span>}
+    {app.status === 'new' && <span class="badge">New</span>}
+  </div>
+  <div class="body">
+    <h2>{app.title}</h2>
+    <p>{app.blurb}</p>
+    <ul class="tags">{app.tags.map((t) => <li>{t}</li>)}</ul>
+  </div>
+</a>
+)}
+<style>
+  .card { display: flex; flex-direction: column; text-decoration: none; background: var(--card); border: 3px solid var(--ink); border-radius: var(--radius); overflow: hidden; box-shadow: 6px 6px 0 var(--ink); transition: transform .15s ease, box-shadow .15s ease; }
+  .card:hover, .card:focus-visible { transform: translate(-3px, -3px) rotate(-.5deg); box-shadow: 9px 9px 0 var(--ink); }
+  .card.is-soon { cursor: default; }
+  .card.is-soon:hover { transform: none; box-shadow: 6px 6px 0 var(--ink); }
+  .art { position: relative; height: 150px; background: radial-gradient(circle at 30% 30%, #ffffff88, transparent 60%), var(--c); display: grid; place-items: center; border-bottom: 3px solid var(--ink); }
+  .emoji { font-size: 4.5rem; transform: rotate(-12deg); filter: drop-shadow(3px 4px 0 rgba(43,45,66,.25)); }
+  .icon { width: 130px; height: auto; transform: rotate(-8deg); filter: drop-shadow(4px 5px 0 rgba(43,45,66,.25)); transition: transform .3s ease; }
+  .card:hover .icon { transform: rotate(-14deg) translate(10px, -8px); }
+  .badge { position: absolute; top: .75rem; right: .75rem; background: var(--sun); border: 2px solid var(--ink); border-radius: 999px; padding: .1rem .6rem; font-weight: 800; font-size: .8rem; transform: rotate(6deg); }
+  .body { padding: 1rem 1.1rem 1.2rem; }
+  h2 { margin: 0 0 .35rem; font-size: 1.3rem; }
+  p { margin: 0 0 .8rem; line-height: 1.45; }
+  .tags { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; margin: 0; padding: 0; }
+  .tags li { font-size: .78rem; font-weight: 700; padding: .15rem .55rem; border-radius: 999px; background: rgba(43,45,66,.08); }
+</style>

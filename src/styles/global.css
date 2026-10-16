@@ -1,0 +1,25 @@
+:root {
+  --ink: #2b2d42;
+  --paper: #fffaf0;
+  --accent: #ff7a59;
+  --accent-2: #48cae4;
+  --sun: #f2c94c;
+  --card: #ffffff;
+  --radius: 18px;
+  font-family: ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { min-height: 100vh; display: flex; flex-direction: column; }
+a { color: inherit; }
+main { flex: 1; }
+.wrap { width: min(1100px, 100% - 2rem); margin-inline: auto; }
+.site-header { padding: 1rem 0; }
+.site-header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.logo { font-weight: 800; text-decoration: none; font-size: 1.15rem; display: inline-flex; gap: .5rem; align-items: center; }
+.logo span { background: var(--sun); border: 2px solid var(--ink); border-radius: 10px; padding: 0 .35rem; transform: rotate(-4deg); display: inline-block; }
+.site-header nav a { font-weight: 700; text-decoration: none; padding: .35rem .7rem; border-radius: 999px; }
+.site-header nav a:hover { background: rgba(43,45,66,.08); }
+.site-footer { padding: 2rem 0; font-size: .9rem; opacity: .75; }
