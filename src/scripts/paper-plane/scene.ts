@@ -499,13 +499,6 @@ export function drawDoorway(v: View) {
   }
   ctx.restore();
   rr(ctx, bx0, by0, bw, bh, 4); ctx.stroke();
-  // little green fire-exit sign on the header face
-  rr(ctx, X(d.x + d.depth / 2 - 0.2), Y(d.bottom + 0.55), 0.4 * ppm, 0.24 * ppm, 3);
-  ctx.fillStyle = '#2a9d5c'; ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `800 ${Math.max(8, 0.1 * ppm)}px system-ui, sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('EXIT', X(d.x + d.depth / 2), Y(d.bottom + 0.43));
 }
 
 /** Speed streaks behind a fast, boosted plane. */
