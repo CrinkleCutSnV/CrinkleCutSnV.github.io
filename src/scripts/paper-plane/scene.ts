@@ -108,6 +108,8 @@ function drawWallItems(v: View) {
     const r = rand(i, 1);
     const kind = i < 0 ? 'picture' : r < 0.36 ? 'door' : r < 0.68 ? 'window' : r < 0.9 ? 'board' : 'clock';
     const cx = x0 + WALL_SEG / 2 + (rand(i, 2) - 0.5) * 0.6;
+    // leave the wall clear around the doorway and its open fire door
+    if (cx > WORLD.door.x - 1.1 && cx < WORLD.door.x + WORLD.door.depth + 1.9) return;
     const X = (x: number) => sx(v, x, WALL_F);
     const Y = (y: number) => sy(v, y);
     ctx.lineWidth = Math.max(1.5, ppm * 0.018);
@@ -438,4 +440,117 @@ export function drawShadow(v: View, x: number, y: number) {
   ctx.beginPath();
   ctx.ellipse(sx(v, x, 1), v.groundY + 0.02 * ppm, 0.22 * ppm * (0.6 + 0.4 * k), 0.035 * ppm, 0, 0, Math.PI * 2);
   ctx.fill();
+}
+
+/** Doorway spanning the corridor: far jamb + open fire door on the back wall, and a
+ *  header (lintel) from `door.bottom` up to the ceiling right across the flight path. */
+export function drawDoorway(v: View) {
+  const { ctx, ppm } = v;
+  const d = WORLD.door;
+  const X = (x: number) => sx(v, x, 1);
+  if (X(d.x + 1.5) < -50 || X(d.x - 0.5) > v.w + 50) return;
+  const wall = layer(v, WALL_LIFT);
+  const WY = (y: number) => sy(wall, y);
+  const Y = (y: number) => sy(v, y);
+  ctx.lineWidth = Math.max(1.5, ppm * 0.02);
+  ctx.strokeStyle = C.outline;
+
+  // threshold strip across the carpet
+  ctx.fillStyle = '#7b8fa6';
+  ctx.beginPath();
+  ctx.moveTo(X(d.x + 0.2), wall.groundY); ctx.lineTo(X(d.x + d.depth + 0.2), wall.groundY);
+  ctx.lineTo(X(d.x + d.depth - 0.35), v.h); ctx.lineTo(X(d.x - 0.35), v.h); ctx.closePath();
+  ctx.fill();
+
+  // open fire door folded back against the wall
+  rr(ctx, X(d.x + d.depth + 0.04), WY(2.2), 0.9 * ppm, 2.2 * ppm, 2);
+  ctx.fillStyle = '#d9a066'; ctx.fill(); ctx.stroke();
+  rr(ctx, X(d.x + d.depth + 0.3), WY(1.9), 0.38 * ppm, 0.6 * ppm, 2);
+  ctx.fillStyle = C.glass; ctx.fill(); ctx.stroke();
+  rr(ctx, X(d.x + d.depth + 0.12), WY(1.15), 0.08 * ppm, 0.3 * ppm, 2);
+  ctx.fillStyle = '#c0c6cc'; ctx.fill(); ctx.stroke();
+
+  // far jamb: a slim architrave on the back wall (it's against the wall, not in the way)
+  const jx = d.x + d.depth / 2 - 0.08;
+  rr(ctx, X(jx), WY(2.35), 0.16 * ppm, 2.35 * ppm, 2);
+  ctx.fillStyle = '#e3c48f'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.fillRect(X(jx + 0.1), WY(2.35), 0.06 * ppm, 2.35 * ppm);
+
+  // header / lintel across the corridor (solid from d.bottom up to the ceiling)
+  const top = WORLD.ceiling + 0.4;
+  // soft shadow it casts on the wall behind
+  ctx.fillStyle = 'rgba(43,45,66,0.10)';
+  ctx.fillRect(X(d.x - 0.1), Y(d.bottom), (d.depth + 0.2) * ppm, 0.1 * ppm);
+  rr(ctx, X(d.x - 0.06), Y(top), (d.depth + 0.12) * ppm, (top - d.bottom) * ppm, 3);
+  ctx.fillStyle = '#efd9ae'; ctx.fill(); ctx.stroke();
+  // chunky beam on the underside with hazard stripes
+  const bx0 = X(d.x - 0.12), bw = (d.depth + 0.24) * ppm, by0 = Y(d.bottom + 0.2), bh = 0.2 * ppm;
+  ctx.save();
+  rr(ctx, bx0, by0, bw, bh, 4);
+  ctx.clip();
+  ctx.fillStyle = '#f2c94c'; ctx.fillRect(bx0, by0, bw, bh);
+  ctx.fillStyle = '#2b2d42';
+  for (let k = -2; k < 12; k++) {
+    const sx0 = bx0 + k * 0.14 * ppm;
+    ctx.beginPath();
+    ctx.moveTo(sx0, by0 + bh); ctx.lineTo(sx0 + 0.07 * ppm, by0 + bh);
+    ctx.lineTo(sx0 + 0.07 * ppm + bh, by0); ctx.lineTo(sx0 + bh, by0); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  rr(ctx, bx0, by0, bw, bh, 4); ctx.stroke();
+  // little green fire-exit sign on the header face
+  rr(ctx, X(d.x + d.depth / 2 - 0.2), Y(d.bottom + 0.55), 0.4 * ppm, 0.24 * ppm, 3);
+  ctx.fillStyle = '#2a9d5c'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `800 ${Math.max(8, 0.1 * ppm)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('EXIT', X(d.x + d.depth / 2), Y(d.bottom + 0.43));
+}
+
+/** Speed streaks behind a fast, boosted plane. */
+export function drawWhoosh(v: View, x: number, y: number, vx: number, vy: number, t: number) {
+  const { ctx, ppm } = v;
+  const sp = Math.hypot(vx, vy) || 1;
+  const ux = vx / sp, uy = vy / sp;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = Math.max(1.5, ppm * 0.018);
+  for (let k = -1; k <= 1; k++) {
+    const off = k * 0.11;
+    const wob = Math.sin(t * 40 + k * 2) * 0.04;
+    const bx = x - ux * (0.45 + wob) - uy * off, by = y - uy * (0.45 + wob) + ux * off;
+    const len = 0.35 + 0.1 * Math.abs(k - 0.5);
+    ctx.beginPath();
+    ctx.moveTo(sx(v, bx, 1), sy(v, by));
+    ctx.lineTo(sx(v, bx - ux * len, 1), sy(v, by - uy * len));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Cartoon "bonk" burst where the plane hit something. */
+export function drawBonk(v: View, x: number, y: number, age: number) {
+  if (age > 0.7) return;
+  const { ctx, ppm } = v;
+  const k = age / 0.7;
+  ctx.save();
+  ctx.globalAlpha = 1 - k;
+  ctx.translate(sx(v, x, 1), sy(v, y));
+  const r = (0.12 + 0.15 * k) * ppm;
+  ctx.beginPath();
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    const rad = i % 2 ? r * 0.5 : r;
+    ctx.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#f2c94c'; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = C.outline; ctx.stroke();
+  ctx.fillStyle = C.outline;
+  ctx.font = `900 ${Math.max(10, 0.13 * ppm)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('BONK', 0, -r - 0.08 * ppm);
+  ctx.restore();
 }

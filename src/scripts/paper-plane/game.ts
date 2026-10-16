@@ -2,7 +2,7 @@ import {
   AERO, FIXED_DT, WORLD, clamp, distanceOf, launchPlane, restingPlane, step,
   type Launch, type Plane,
 } from './physics';
-import { drawBackground, drawDesk, drawPlane, drawShadow, type View } from './scene';
+import { drawBackground, drawBonk, drawDesk, drawDoorway, drawPlane, drawShadow, drawWhoosh, type View } from './scene';
 
 const BEST_KEY = 'crinklecut.paperPlane.best';
 const VIEW_BELOW = 0.6; // metres of floor band visible below the flight line
@@ -16,7 +16,22 @@ const LENGTH_SHARE = 0.4;
 
 interface Sample { t: number; x: number; y: number }
 
-function remarkFor(d: number) {
+const DOOR_MIN_X = 6.5;
+
+function remarkFor(d: number, p: Plane) {
+  if (p.crashed === 'lintel') {
+    const lines = [
+      'BONK! Straight into the door frame. Mind your head!',
+      'Clipped the doorway. Facilities are adding a "Low beam" sign.',
+      'Thwack! That lintel came out of nowhere.',
+      'Grounded by a door frame. Fly lower next time?',
+    ];
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+  if (p.boosted && d >= 70) {
+    if (d >= 95) return 'What a swoop! That plane has clearly done this before.';
+    return 'Ooh, a swooper! Was that skill or luck?';
+  }
   if (d < 2) return 'Nosedive into the bin. It happens to the best of us.';
   if (d < 8) return 'Made it past the desk. Gentle start!';
   if (d < 20) return 'Respectable. Halfway to the kettle.';
@@ -190,6 +205,7 @@ export function initPaperPlane(root: HTMLElement) {
 
   function reset() {
     plane = restingPlane();
+    bonk = null;
     trail = [];
     hud.end.classList.add('is-hidden');
     hud.hint.classList.remove('is-hidden');
@@ -213,7 +229,7 @@ export function initPaperPlane(root: HTMLElement) {
       showBest();
     }
     hud.endDistance.textContent = `${d.toFixed(1)} m`;
-    hud.endRemark.textContent = remarkFor(d);
+    hud.endRemark.textContent = remarkFor(d, plane);
     hud.endBest.textContent = isBest ? 'New best!' : `Best: ${best.toFixed(1)} m`;
     hud.endBest.classList.toggle('is-new', isBest);
     hud.end.classList.remove('is-hidden');
@@ -256,16 +272,19 @@ export function initPaperPlane(root: HTMLElement) {
   // ---- main loop ------------------------------------------------------------
   let acc = 0;
   let last = performance.now();
+  let bonk: { x: number; y: number; t: number } | null = null;
   let wasStopped = false;
 
   function frame(now: number) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
 
-    if (plane.phase === 'flying' || plane.phase === 'sliding') {
+    if (plane.phase === 'flying' || plane.phase === 'falling' || plane.phase === 'sliding') {
       acc += dt;
       while (acc >= FIXED_DT) {
+        const wasCrashed = plane.crashed;
         step(plane);
+        if (!wasCrashed && plane.crashed) bonk = { x: WORLD.door.x - 0.02, y: plane.y + 0.05, t: now / 1000 };
         acc -= FIXED_DT;
       }
       trail.push({ x: plane.x, y: plane.y });
@@ -281,7 +300,11 @@ export function initPaperPlane(root: HTMLElement) {
 
     // camera: keep the plane about a third of the way across, smoothed
     const vw = viewWidthM();
-    if (plane.phase === 'ready') camTarget = Math.min(-2.6, rest.x - vw * 0.3);
+    if (plane.phase === 'ready') {
+      camTarget = Math.min(-2.6, rest.x - vw * 0.3);
+      // keep the doorway just beyond the right edge of the throwing screen
+      WORLD.door.x = Math.max(DOOR_MIN_X, camTarget + vw + 0.6);
+    }
     else camTarget = Math.max(Math.min(-2.6, rest.x - vw * 0.3), plane.x - vw * 0.35 + clamp(plane.vx, 0, 12) * 0.08);
     camX += (camTarget - camX) * (1 - Math.exp(-dt * 4.5));
 
@@ -294,6 +317,7 @@ export function initPaperPlane(root: HTMLElement) {
     const v: View = { ctx, w, h, ppm, camX, groundY };
     drawBackground(v);
     drawDesk(v);
+    drawDoorway(v);
     if (plane.phase === 'ready') drawZone(v);
     if (trail.length > 1) {
       ctx.save();
@@ -310,7 +334,11 @@ export function initPaperPlane(root: HTMLElement) {
     }
     if (plane.phase !== 'ready' || dragging) drawShadow(v, plane.x, plane.y);
     if (dragging && preview) drawAim(v, preview);
+    if ((plane.boost === 1 || plane.boost === 2) && Math.hypot(plane.vx, plane.vy) > 8.5) {
+      drawWhoosh(v, plane.x, plane.y, plane.vx, plane.vy, performance.now() / 1000);
+    }
     drawPlane(v, plane.x, plane.y, plane.pitch);
+    if (bonk) drawBonk(v, bonk.x, bonk.y, performance.now() / 1000 - bonk.t);
   }
 
   root.dataset.phase = 'ready';
@@ -322,6 +350,12 @@ export function initPaperPlane(root: HTMLElement) {
     get distance() { return distanceOf(plane); },
     get lastLaunch() { return lastLaunch; },
     get camX() { return camX; },
+    get boost() { return plane.boost; },
+    get boosted() { return plane.boosted; },
+    get crashed() { return plane.crashed; },
+    get doorX() { return WORLD.door.x; },
+    get x() { return plane.x; },
+    get y() { return plane.y; },
     get ppm() { return ppm; },
   };
 }

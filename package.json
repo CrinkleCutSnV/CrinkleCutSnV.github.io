@@ -7,7 +7,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "check:physics": "esbuild scripts/sim.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/sim.mjs --format=esm && node node_modules/.cache/sim.mjs",
-    "shots": "node scripts/shots.mjs"
+    "shots": "node scripts/shots.mjs",
+    "shots:features": "node scripts/feature-shots.mjs"
   },
   "dependencies": {
     "astro": "^5.18.2",

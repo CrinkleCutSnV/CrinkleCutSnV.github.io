@@ -9,6 +9,22 @@ export const WORLD = {
   deskLeft: -1.6,
   // Where the throw may be released from (keeps it near the desk)
   throwZone: { minX: -0.9, maxX: 0.6, minY: 0.95, maxY: 2.1 },
+  // Doorway across the corridor: a header/lintel from `bottom` up to the ceiling.
+  // `x` is its leading face; the game nudges it so it's just off the initial screen.
+  door: { x: 6.5, depth: 0.45, bottom: 2.7 },
+};
+
+// Secret dive boost: a plane that dives fast enough "bites" the air and swoops out
+// of the dive with extra lift, then glides on with less drag while it's still fast.
+export const DIVE = {
+  armSpeed: 11.5, // m/s airspeed needed while diving
+  armAngle: (-18 * Math.PI) / 180, // flight path must be at least this steep downwards
+  pullG: 8, // nose comes up to pull this many g while pulling out of the dive
+  pullLag: 0.07, // and responds much faster than normal
+  swoopTop: (10 * Math.PI) / 180, // stop the hard pull once climbing at this angle
+  levelGain: 1.2, // how firmly the boosted glide levels off afterwards
+  glideDrag: 0.5, // drag multiplier while boosted
+  endSpeed: 6.5, // boost wears off below this speed
 };
 
 export const AERO = {
@@ -27,7 +43,9 @@ export const AERO = {
 
 export const FIXED_DT = 1 / 240;
 
-export type Phase = 'ready' | 'flying' | 'sliding' | 'stopped';
+export type Phase = 'ready' | 'flying' | 'falling' | 'sliding' | 'stopped';
+/** 0 none, 1 pulling out of a dive, 2 boosted glide, 3 spent */
+export type Boost = 0 | 1 | 2 | 3;
 
 export interface Plane {
   x: number;
@@ -39,6 +57,9 @@ export interface Plane {
   time: number;
   maxHeight: number;
   ceilingHits: number;
+  boost: Boost;
+  boosted: boolean; // did the dive boost trigger at any point?
+  crashed: null | 'lintel';
 }
 
 export interface Launch {
@@ -63,6 +84,9 @@ export function restingPlane(): Plane {
     time: 0,
     maxHeight: 0,
     ceilingHits: 0,
+    boost: 0,
+    boosted: false,
+    crashed: null,
   };
 }
 
@@ -81,6 +105,9 @@ export function launchPlane(l: Launch): Plane {
     time: 0,
     maxHeight: y,
     ceilingHits: 0,
+    boost: 0,
+    boosted: false,
+    crashed: null,
   };
 }
 
@@ -115,22 +142,60 @@ export function step(p: Plane, dt = FIXED_DT): Plane {
     return p;
   }
 
+  if (p.phase === 'falling') {
+    // knocked out of the air: tumble down, a bit of drag, no lift
+    const sp = Math.hypot(p.vx, p.vy);
+    p.vx -= p.vx * sp * 0.08 * dt;
+    p.vy -= WORLD.gravity * dt + p.vy * sp * 0.08 * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.pitch -= 7 * dt;
+    if (p.y <= 0.06) {
+      p.y = 0.06;
+      p.vy = 0;
+      p.vx *= 0.3;
+      p.pitch = -0.08;
+      p.phase = Math.abs(p.vx) > 0.01 ? 'sliding' : 'stopped';
+    }
+    return p;
+  }
+
   const speed = Math.hypot(p.vx, p.vy);
   const gamma = Math.atan2(p.vy, p.vx); // flight path angle
+
+  // secret dive boost state machine
+  if (p.boost === 0 && gamma < DIVE.armAngle && speed > DIVE.armSpeed) {
+    p.boost = 1;
+    p.boosted = true;
+  }
+  if (p.boost === 1 && gamma > DIVE.swoopTop) p.boost = 2;
+  if ((p.boost === 1 || p.boost === 2) && speed < DIVE.endSpeed) p.boost = 3;
+  const dragMul = p.boost === 1 || p.boost === 2 ? DIVE.glideDrag : 1;
 
   // Pitch: the nose chases "flight path + trim angle". Paper planes are pitch-stable,
   // so the trim angle shrinks as speed rises (the nose drops when fast), and the lag
   // lets a slow plane rear up and stall, or a dipping plane flare into a glide.
   const sp = Math.max(speed, 0.5);
   const targetAlpha = clamp(AERO.trimAlpha * (AERO.trimSpeed / sp) ** 2, (-2 * Math.PI) / 180, (16 * Math.PI) / 180);
-  const target = gamma + targetAlpha;
-  p.pitch += wrapAngle(target - p.pitch) * Math.min(1, dt / AERO.pitchLag);
+  let target = gamma + targetAlpha;
+  let lag = AERO.pitchLag;
+  if (p.boost === 1) {
+    // dive boost: the plane "bites" and pitches up to pull several g
+    const pullAlpha = (AERO.alphaRef * DIVE.pullG * WORLD.gravity) / (AERO.liftK * sp * sp);
+    target = gamma + Math.min(pullAlpha, AERO.stallAlpha);
+    lag = DIVE.pullLag;
+  } else if (p.boost === 2) {
+    // after the swoop: hold the nose so the path eases back to level (no runaway climb)
+    const want = Math.max(0, WORLD.gravity * Math.cos(gamma) - DIVE.levelGain * gamma * sp);
+    target = gamma + Math.min((AERO.alphaRef * want) / (AERO.liftK * sp * sp), AERO.stallAlpha);
+  }
+  p.pitch += wrapAngle(target - p.pitch) * Math.min(1, dt / lag);
 
   const alpha = wrapAngle(p.pitch - gamma);
   const v2 = speed * speed;
   const lift = AERO.liftK * v2 * liftCurve(alpha);
   const dragK = AERO.dragK0 + AERO.dragKi * Math.min(alpha * alpha, 0.6);
-  const drag = dragK * v2;
+  const drag = dragK * v2 * dragMul;
 
   let ax = 0;
   let ay = -WORLD.gravity;
@@ -166,6 +231,19 @@ export function step(p: Plane, dt = FIXED_DT): Plane {
     p.phase = 'sliding';
   }
 
+  // doorway lintel: anything above its underside within the header's depth is solid
+  const d = WORLD.door;
+  const nose = p.x + 0.3, tail = p.x - 0.3;
+  if (nose >= d.x && tail <= d.x + d.depth && p.y + 0.06 > d.bottom) {
+    p.crashed = 'lintel';
+    p.phase = 'falling';
+    p.boost = 3;
+    p.x = Math.min(p.x, d.x - 0.3);
+    p.vx = -Math.min(2.5, 0.15 * Math.abs(p.vx) + 0.5); // bounce back off the beam
+    p.vy = Math.min(p.vy, 0) - 0.5;
+    return p;
+  }
+
   // floor
   if (p.y <= 0.06) {
     p.y = 0.06;
@@ -188,5 +266,5 @@ export function distanceOf(p: Plane) {
 export function simulate(l: Launch) {
   const p = launchPlane(l);
   while (p.phase !== 'stopped') step(p);
-  return { distance: distanceOf(p), time: p.time, maxHeight: p.maxHeight, ceilingHits: p.ceilingHits };
+  return { distance: distanceOf(p), time: p.time, maxHeight: p.maxHeight, ceilingHits: p.ceilingHits, boosted: p.boosted, crashed: p.crashed };
 }
