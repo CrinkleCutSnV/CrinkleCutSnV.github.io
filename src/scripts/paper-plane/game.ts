@@ -8,11 +8,15 @@ const BEST_KEY = 'crinklecut.paperPlane.best';
 const VIEW_BELOW = 0.6; // metres of floor band visible below the flight line
 const VIEW_ABOVE = WORLD.ceiling + 0.35;
 
-// Drag -> throw tuning
+// Drag -> throw tuning. Throw speed comes only from how fast the hand is moving at
+// release (the last ~100 ms), never from how far it was dragged, so a still release is weak.
 const FLICK_WINDOW_MS = 100;
-const FLICK_GAIN = 0.85; // share of release speed from flick velocity (world m/s)
-const LENGTH_GAIN = 7.5; // m/s of throw per metre of drag
-const LENGTH_SHARE = 0.4;
+const FLICK_GAIN = 1.0; // throw speed per m/s of hand speed
+const MIN_FLICK = 0.8; // hand speed (m/s) below which the release is treated as "still"
+// A pointer-up arriving this soon after the last move, at the same spot, is part of the flick
+// (events only come once a frame); any longer and the hand had stopped, so it counts as still.
+const RELEASE_GAP_MS = 60;
+const GRAB_RADIUS = 0.45; // m: you can also pick the plane up straight off the desk
 
 interface Sample { t: number; x: number; y: number }
 
@@ -65,9 +69,12 @@ export function initPaperPlane(root: HTMLElement) {
   // drag state
   let dragging = false;
   let pointerId = -1;
-  let grab = { x: 0, y: 0 }; // world point where the drag started
   let samples: Sample[] = [];
+  let dragStart = { x: 0, y: 0 };
+  let grabOffset = { x: 0, y: 0 }; // only non-zero when the plane is picked up off the desk, below the zone
   let preview: Launch | null = null;
+  let zoneFlash = -1; // time (s) of a press outside the zone, to flash the outline
+  let lastRelease: null | { reason: 'release' | 'exit' | 'still' | 'tap'; flick: number } = null;
 
   const showBest = () => (hud.best.textContent = best > 0 ? `Best: ${best.toFixed(1)} m` : 'Best: –');
   showBest();
@@ -89,71 +96,87 @@ export function initPaperPlane(root: HTMLElement) {
 
   const viewWidthM = () => w / ppm;
 
-  // Pointer position in metres, measured in screen space (independent of the moving camera),
-  // so a drag that starts while the camera is still panning back to the desk behaves the same.
+  const rest = restingPlane();
+  // Where the camera sits while you're aiming. Pointer positions are mapped to the world
+  // with this (not the live, still-easing camera), so the zone you see is the zone you get.
+  const readyCamX = () => Math.min(-2.6, rest.x - viewWidthM() * 0.3);
+
+  // Pointer position in world metres
   const toWorld = (clientX: number, clientY: number) => {
     const r = canvas.getBoundingClientRect();
-    return { x: (clientX - r.left) / ppm, y: (groundY - (clientY - r.top)) / ppm };
+    return { x: (clientX - r.left) / ppm + readyCamX(), y: (groundY - (clientY - r.top)) / ppm };
+  };
+  // Where the held plane is for a pointer position (the grab offset is applied during a drag)
+  const toHand = (clientX: number, clientY: number) => {
+    const p = toWorld(clientX, clientY);
+    return { x: p.x + grabOffset.x, y: p.y + grabOffset.y };
   };
 
   // ---- throwing -----------------------------------------------------------
-  const rest = restingPlane();
+  const inZone = (p: { x: number; y: number }) => {
+    const z = WORLD.throwZone;
+    return p.x >= z.minX && p.x <= z.maxX && p.y >= z.minY && p.y <= z.maxY;
+  };
 
+  // the plane sits under your finger, kept inside the zone (so it lifts off the desk when grabbed)
   function heldPosition(p: { x: number; y: number }) {
     const z = WORLD.throwZone;
-    // the plane starts on the desk; lift it as soon as it's picked up
-    return {
-      x: clamp(rest.x + (p.x - grab.x), z.minX, z.maxX),
-      y: clamp(Math.max(z.minY, rest.y + 0.25) + (p.y - grab.y), z.minY, z.maxY),
-    };
+    return { x: clamp(p.x, z.minX, z.maxX), y: clamp(p.y, z.minY, z.maxY) };
   }
 
-  function computeLaunch(): Launch | null {
-    if (samples.length < 2) return null;
+  /** Hand speed (m/s) and direction over the last ~100 ms of the drag. */
+  function flickOf() {
     const last = samples[samples.length - 1];
-    const first = samples[0];
     // flick velocity over the last ~100 ms
     let k = samples.length - 1;
     while (k > 0 && last.t - samples[k - 1].t <= FLICK_WINDOW_MS) k--;
     if (k === samples.length - 1) k = Math.max(0, k - 1);
     const s0 = samples[k];
     const dt = Math.max(0.016, (last.t - s0.t) / 1000);
-    let fvx = (last.x - s0.x) / dt;
-    let fvy = (last.y - s0.y) / dt;
-    const flick = Math.hypot(fvx, fvy);
+    const vx = (last.x - s0.x) / dt;
+    const vy = (last.y - s0.y) / dt;
+    return { vx, vy, flick: Math.hypot(vx, vy) };
+  }
 
-    const dx = last.x - first.x;
-    const dy = last.y - first.y;
-    const len = Math.hypot(dx, dy);
-
-    // direction: flick direction if the hand was moving, otherwise the overall drag
-    let dirX = dx, dirY = dy;
-    if (flick > 0.8) { dirX = fvx; dirY = fvy; }
-    if (Math.hypot(dirX, dirY) < 1e-6) return null;
-
-    let angle = Math.atan2(dirY, dirX);
-    let speed = FLICK_GAIN * (1 - LENGTH_SHARE) * flick + LENGTH_SHARE * LENGTH_GAIN * len;
-    if (dirX <= 0) {
-      // dragged backwards: the plane just flops out of your hand
-      angle = clamp(angle, -Math.PI, Math.PI);
-      speed = Math.min(speed, 1.5);
+  function computeLaunch(): Launch | null {
+    if (samples.length < 2) return null;
+    const { vx, vy, flick } = flickOf();
+    const pos = heldPosition(samples[samples.length - 1]);
+    let angle = Math.atan2(vy, vx);
+    let speed = clamp(FLICK_GAIN * flick, 0, AERO.maxSpeed);
+    if (flick < MIN_FLICK || vx <= 0) {
+      // let go of a still (or backwards-moving) hand: the plane just flops out of it
+      speed = AERO.minSpeed;
       angle = -0.3;
     }
-    speed = clamp(speed, 0, AERO.maxSpeed);
-    const pos = heldPosition(last);
     return { x: pos.x, y: pos.y, speed, angle: clamp(angle, (-50 * Math.PI) / 180, (70 * Math.PI) / 180) };
+  }
+
+  function addSample(t: number, clientX: number, clientY: number) {
+    samples.push({ t, ...toHand(clientX, clientY) });
+    // keep only recent motion (plus the last sample before it, so a still hand reads as still)
+    const cutoff = t - 400;
+    while (samples.length > 2 && samples[1].t < cutoff) samples.shift();
   }
 
   function onDown(e: PointerEvent) {
     if (plane.phase !== 'ready' || dragging) return;
     e.preventDefault();
+    const p = toWorld(e.clientX, e.clientY);
+    const onPlane = Math.hypot(p.x - rest.x, p.y - rest.y) <= GRAB_RADIUS;
+    if (!inZone(p) && !onPlane) {
+      // no aiming from outside the zone: just flash its outline
+      zoneFlash = performance.now() / 1000;
+      return;
+    }
     dragging = true;
     pointerId = e.pointerId;
     canvas.setPointerCapture(e.pointerId);
-    const p = toWorld(e.clientX, e.clientY);
-    grab = p;
-    samples = [{ t: e.timeStamp, ...p }];
+    // grabbed off the desk just below the zone: lift it into the zone and keep that offset
     const pos = heldPosition(p);
+    grabOffset = { x: pos.x - p.x, y: pos.y - p.y };
+    samples = [{ t: e.timeStamp, ...pos }];
+    dragStart = pos;
     plane.x = pos.x; plane.y = pos.y;
     hud.hint.classList.add('is-hidden');
     root.dataset.phase = 'aiming';
@@ -164,12 +187,12 @@ export function initPaperPlane(root: HTMLElement) {
     e.preventDefault();
     const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
     for (const ce of events.length ? events : [e]) {
-      samples.push({ t: ce.timeStamp, ...toWorld(ce.clientX, ce.clientY) });
-    }
-    const cutoff = samples[samples.length - 1].t - 400;
-    while (samples.length > 2 && samples[1].t < cutoff) {
-      // keep the very first sample (drag start) for drag length
-      samples.splice(1, 1);
+      addSample(ce.timeStamp, ce.clientX, ce.clientY);
+      // leaving the throw zone lets go of the plane right there, mid-flick
+      if (!inZone(samples[samples.length - 1])) {
+        release('exit');
+        return;
+      }
     }
     const pos = heldPosition(samples[samples.length - 1]);
     preview = computeLaunch();
@@ -179,19 +202,31 @@ export function initPaperPlane(root: HTMLElement) {
 
   function onUp(e: PointerEvent) {
     if (!dragging || e.pointerId !== pointerId) return;
+    const prev = samples[samples.length - 1];
+    const p = toHand(e.clientX, e.clientY);
+    const samePlace = Math.hypot(p.x - prev.x, p.y - prev.y) < 1e-3;
+    if (!(samePlace && e.timeStamp - prev.t <= RELEASE_GAP_MS)) addSample(e.timeStamp, e.clientX, e.clientY);
+    release('release');
+  }
+
+  function release(reason: 'release' | 'exit') {
     dragging = false;
-    samples.push({ t: e.timeStamp, ...toWorld(e.clientX, e.clientY) });
-    // a release with no movement in the last moment shouldn't zero the flick
-    const l = computeLaunch() ?? preview;
+    if (canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+    const l = computeLaunch();
+    const flick = samples.length > 1 ? flickOf().flick : 0;
+    const lastS = samples[samples.length - 1];
+    const moved = Math.hypot(lastS.x - dragStart.x, lastS.y - dragStart.y);
     preview = null;
     hud.aim.classList.add('is-hidden');
-    if (!l || l.speed < 0.6) {
+    if (!l || (reason === 'release' && moved < 0.08 && flick < MIN_FLICK)) {
       // just a tap: put it back on the desk
+      lastRelease = { reason: 'tap', flick };
       plane = restingPlane();
       hud.hint.classList.remove('is-hidden');
       root.dataset.phase = 'ready';
       return;
     }
+    lastRelease = { reason: flick < MIN_FLICK ? 'still' : reason, flick };
     lastLaunch = l;
     plane = launchPlane(l);
     trail = [];
@@ -259,13 +294,26 @@ export function initPaperPlane(root: HTMLElement) {
 
   function drawZone(v: View) {
     const z = WORLD.throwZone;
+    const x = (z.minX - v.camX) * ppm, y = groundY - z.maxY * ppm;
+    const zw = (z.maxX - z.minX) * ppm, zh = (z.maxY - z.minY) * ppm;
+    const since = performance.now() / 1000 - zoneFlash;
+    const flash = since >= 0 && since < 0.7 ? 0.5 + 0.5 * Math.cos(since * Math.PI * 4) : 0;
     ctx.save();
-    ctx.setLineDash([6, 6]);
-    ctx.strokeStyle = 'rgba(43,45,66,0.18)';
-    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect((z.minX - v.camX) * ppm, groundY - z.maxY * ppm, (z.maxX - z.minX) * ppm, (z.maxY - z.minY) * ppm, 12);
+    ctx.roundRect(x, y, zw, zh, 14);
+    ctx.fillStyle = dragging ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.3)';
+    ctx.fill();
+    ctx.setLineDash([9, 7]);
+    ctx.lineDashOffset = -(performance.now() / 60) % 16; // gently marching ants
+    ctx.lineWidth = Math.max(2, ppm * 0.014);
+    ctx.strokeStyle = flash > 0 ? `rgba(214,64,69,${0.55 + 0.45 * flash})` : dragging ? 'rgba(43,45,66,0.85)' : 'rgba(43,45,66,0.7)';
     ctx.stroke();
+    ctx.setLineDash([]);
+    const fs = Math.round(clamp(ppm * 0.085, 10, 15));
+    ctx.font = `700 ${fs}px system-ui, sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = flash > 0 ? 'rgba(214,64,69,0.95)' : 'rgba(43,45,66,0.75)';
+    ctx.fillText('THROW ZONE', x + 10, y + 8);
     ctx.restore();
   }
 
@@ -301,7 +349,7 @@ export function initPaperPlane(root: HTMLElement) {
     // camera: keep the plane about a third of the way across, smoothed
     const vw = viewWidthM();
     if (plane.phase === 'ready') {
-      camTarget = Math.min(-2.6, rest.x - vw * 0.3);
+      camTarget = readyCamX();
       // keep the doorway just beyond the right edge of the throwing screen
       WORLD.door.x = Math.max(DOOR_MIN_X, camTarget + vw + 0.6);
     }
@@ -357,5 +405,9 @@ export function initPaperPlane(root: HTMLElement) {
     get x() { return plane.x; },
     get y() { return plane.y; },
     get ppm() { return ppm; },
+    get groundY() { return groundY; },
+    get readyCamX() { return readyCamX(); },
+    get zone() { return { ...WORLD.throwZone }; },
+    get lastRelease() { return lastRelease; },
   };
 }

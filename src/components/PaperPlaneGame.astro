@@ -2,14 +2,14 @@
 // Paper aeroplane throwing game. All logic lives in src/scripts/paper-plane/.
 ---
 <div class="pp" data-paper-plane>
-  <canvas aria-label="Paper aeroplane game. Drag the plane to the right and let go to throw it."></canvas>
+  <canvas aria-label="Paper aeroplane game. Grab the plane inside the throw zone and flick it to the right to throw it."></canvas>
   <div class="hud">
     <div class="pill" data-distance>0.0 m</div>
     <div class="pill pill--best" data-best>Best: –</div>
   </div>
   <div class="hint" data-hint>
-    <strong>Drag the plane to the right and let go!</strong>
-    <span>Faster flick = faster throw. Aim slightly upwards for a long glide, but mind the ceiling.</span>
+    <strong>Grab the plane and flick it to the right!</strong>
+    <span>Faster flick = faster throw. Throw from inside the dotted zone; drag out of it and the plane goes there and then.</span>
   </div>
   <div class="aim is-hidden" data-aim></div>
   <div class="end is-hidden" data-end role="dialog" aria-live="polite" aria-label="Flight result">
@@ -48,9 +48,9 @@
   .hud { position: absolute; inset: .75rem .75rem auto; display: flex; justify-content: space-between; pointer-events: none; }
   .pill { background: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: .3rem .85rem; font-weight: 800; font-size: clamp(1rem, 2.4vw, 1.4rem); font-variant-numeric: tabular-nums; box-shadow: 3px 3px 0 var(--ink); }
   .pill--best { background: var(--sun); font-size: clamp(.85rem, 1.8vw, 1.05rem); align-self: center; }
-  .hint { position: absolute; left: 50%; top: 22%; transform: translateX(-30%); max-width: min(420px, 70%); background: rgba(255,255,255,.92); border: 2px solid var(--ink); border-radius: 14px; padding: .7rem .9rem; pointer-events: none; display: grid; gap: .25rem; font-size: .92rem; line-height: 1.35; animation: bob 2.2s ease-in-out infinite; }
+  .hint { position: absolute; right: 3%; top: 18%; max-width: min(360px, 40%); background: rgba(255,255,255,.92); border: 2px solid var(--ink); border-radius: 14px; padding: .7rem .9rem; pointer-events: none; display: grid; gap: .25rem; font-size: .92rem; line-height: 1.35; animation: bob 2.2s ease-in-out infinite; }
   .hint strong { font-size: 1.05rem; }
-  @keyframes bob { 50% { transform: translateX(-30%) translateY(-6px); } }
+  @keyframes bob { 50% { transform: translateY(-6px); } }
   .aim { position: absolute; transform: translate(-50%, -100%); background: rgba(43,45,66,.82); color: #fff; font-weight: 700; font-size: .8rem; padding: .15rem .5rem; border-radius: 999px; pointer-events: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .end { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(43,45,66,.25); }
   .end-card { background: #fff; border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: 6px 6px 0 var(--ink); padding: 1.2rem 1.6rem 1.4rem; text-align: center; max-width: min(380px, 88%); animation: pop .25s ease-out; }
@@ -65,7 +65,7 @@
   .end button:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
   .end button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
   @media (max-width: 640px) {
-    .hint { top: 3.4rem; left: 50%; transform: translateX(-50%); max-width: 72%; text-align: center; font-size: .8rem; padding: .45rem .6rem; animation: none; }
+    .hint { top: auto; bottom: .5rem; right: .5rem; left: auto; transform: none; max-width: 48%; text-align: center; font-size: .8rem; padding: .45rem .6rem; animation: none; }
     .hint strong { font-size: .88rem; }
     .hint span { display: none; }
     .end-card { padding: .8rem 1rem 1rem; }

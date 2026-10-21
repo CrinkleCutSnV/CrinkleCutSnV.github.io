@@ -7,8 +7,9 @@ export const WORLD = {
   ceiling: 3.5, // corridor ceiling height (m)
   deskTop: 0.76, // desk surface height (m)
   deskLeft: -1.6,
-  // Where the throw may be released from (keeps it near the desk)
-  throwZone: { minX: -0.9, maxX: 0.6, minY: 0.95, maxY: 2.1 },
+  // Where the plane can be held and thrown from (around the desk). Dragging out of it
+  // throws the plane on the spot, so it's also the furthest you can reach.
+  throwZone: { minX: -1.45, maxX: 1.3, minY: 0.82, maxY: 3.05 },
   // Doorway across the corridor: a header/lintel from `bottom` up to the ceiling.
   // `x` is its leading face; the game nudges it so it's just off the initial screen.
   door: { x: 6.5, depth: 0.45, bottom: 2.7 },
