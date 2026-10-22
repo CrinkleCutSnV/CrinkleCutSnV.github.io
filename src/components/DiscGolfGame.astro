@@ -1,0 +1,83 @@
+---
+// Arcade disc golf. All logic lives in src/scripts/disc-golf/.
+---
+<div class="dg" data-disc-golf data-stage="aim">
+  <canvas aria-label="Arcade disc golf. Tap or press Space three times to set the direction, power and curve of each throw."></canvas>
+  <div class="hud">
+    <div class="pill" data-hole>Hole 1 · Par 2</div>
+    <div class="pill pill--strokes" data-strokes>Throws: 0</div>
+    <div class="pill pill--best" data-kind>In hand: Driver</div>
+    <div class="pill pill--best" data-best>Best: –</div>
+  </div>
+  <div class="hint" data-hint></div>
+  <div class="toast is-hidden" data-toast aria-live="polite"></div>
+  <div class="end is-hidden" data-end role="dialog" aria-live="polite" aria-label="Hole result">
+    <div class="end-card">
+      <p class="end-label" data-end-title>Hole 1</p>
+      <p class="end-score" data-end-score>Par</p>
+      <p class="end-line" data-end-line></p>
+      <p class="end-remark" data-end-remark></p>
+      <p><span class="end-best" data-end-best></span></p>
+      <div class="end-buttons">
+        <button type="button" data-again>Play again</button>
+        <button type="button" class="is-hidden secondary" data-next>Next hole</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { initDiscGolf } from '../scripts/disc-golf/game';
+  document.querySelectorAll<HTMLElement>('[data-disc-golf]').forEach((el) => initDiscGolf(el));
+</script>
+
+<style>
+  .dg {
+    position: relative;
+    width: 100%;
+    height: clamp(420px, min(78vh, 66vw), 820px);
+    border: 3px solid var(--ink);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 6px 6px 0 var(--ink);
+    background: #79c25e;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
+  .dg[data-stage='flying'] canvas, .dg[data-stage='settle'] canvas, .dg[data-stage='holed'] canvas { cursor: default; }
+  .hud { position: absolute; top: .75rem; left: .75rem; display: flex; flex-direction: column; align-items: flex-start; gap: .4rem; pointer-events: none; }
+  .pill { background: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: .25rem .8rem; font-weight: 800; font-size: clamp(.9rem, 2vw, 1.15rem); font-variant-numeric: tabular-nums; box-shadow: 3px 3px 0 var(--ink); white-space: nowrap; }
+  .pill--strokes { background: var(--sun); font-size: clamp(1rem, 2.4vw, 1.3rem); }
+  .pill--best { font-size: clamp(.75rem, 1.6vw, .9rem); opacity: .9; }
+  .hint { position: absolute; left: 50%; top: .75rem; transform: translateX(-50%); max-width: min(330px, 40%); background: rgba(255,255,255,.92); border: 2px solid var(--ink); border-radius: 14px; padding: .55rem .8rem; pointer-events: none; display: grid; gap: .15rem; font-size: .88rem; line-height: 1.3; text-align: center; animation: bob 2.2s ease-in-out infinite; }
+  .hint :global(strong) { font-size: 1rem; }
+  @keyframes bob { 50% { transform: translate(-50%, -5px); } }
+  .toast { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); background: #fff; border: 3px solid var(--ink); border-radius: 999px; padding: .35rem 1rem; font-weight: 900; font-size: clamp(1rem, 2.6vw, 1.35rem); box-shadow: 4px 4px 0 var(--ink); pointer-events: none; white-space: nowrap; animation: toast .3s ease-out; }
+  .toast.is-big { background: var(--sun); font-size: clamp(2rem, 7vw, 3.4rem); padding: .2rem 1.3rem; transform: translate(-50%, -50%) rotate(-4deg); letter-spacing: .02em; }
+  @keyframes toast { from { opacity: 0; scale: .6; } }
+  .end { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(43,45,66,.25); }
+  .end-card { background: #fff; border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: 6px 6px 0 var(--ink); padding: 1.1rem 1.6rem 1.3rem; text-align: center; max-width: min(400px, 88%); animation: pop .25s ease-out; }
+  @keyframes pop { from { transform: scale(.85) rotate(-3deg); opacity: 0; } }
+  .end-card p { margin: 0; }
+  .end-label { font-weight: 700; opacity: .7; }
+  .end-score { font-size: clamp(2.2rem, 7vw, 3.4rem); font-weight: 900; line-height: 1.1; }
+  .end-line { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .end-remark { margin: .35rem 0 .6rem !important; }
+  .end-best { display: inline-block; font-weight: 800; margin-bottom: .9rem; padding: .1rem .7rem; border: 2px solid transparent; }
+  .end-best.is-new { background: var(--sun); border: 2px solid var(--ink); border-radius: 999px; transform: rotate(-3deg); }
+  .end-buttons { display: flex; gap: .6rem; justify-content: center; flex-wrap: wrap; }
+  .end button { font: inherit; font-weight: 800; font-size: 1.1rem; background: var(--accent); color: #fff; border: 3px solid var(--ink); border-radius: 999px; padding: .55rem 1.4rem; box-shadow: 3px 3px 0 var(--ink); cursor: pointer; }
+  .end button.secondary { background: #fff; color: var(--ink); }
+  .end button:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+  .end button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  @media (max-width: 640px) {
+    /* on a phone the live selector in the bottom panel says "Tap!" instead */
+    .hint { display: none; }
+    .end-card { padding: .8rem 1rem 1rem; }
+    .end-remark { font-size: .85rem; }
+    .end button { font-size: .95rem; padding: .4rem 1.1rem; }
+  }
+  .is-hidden { display: none !important; }
+</style>

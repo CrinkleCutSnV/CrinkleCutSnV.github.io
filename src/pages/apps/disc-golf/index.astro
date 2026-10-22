@@ -1,0 +1,34 @@
+---
+import Base from '../../../layouts/Base.astro';
+import DiscGolfGame from '../../../components/DiscGolfGame.astro';
+---
+<Base title="Arcade Disc Golf · CrinkleCutSnV's playground" description="A top-down arcade disc golf game. Time your taps to set direction, power and curve, and bend it round the old oak into the chains.">
+  <section class="wrap game-page">
+    <div class="title-row">
+      <h1>Arcade Disc Golf 🥏</h1>
+      <a class="back" href="/">← All apps</a>
+    </div>
+    <DiscGolfGame />
+    <details class="how" open>
+      <summary>How to play</summary>
+      <ol>
+        <li><strong>Direction:</strong> the arrow sweeps from side to side. Tap, click or press <kbd>Space</kbd> to lock it in.</li>
+        <li><strong>Power:</strong> the meter swings quickly between nothing and full. Tap at the strength you want.</li>
+        <li><strong>Curve:</strong> the needle swings from hard left to hard right. Tap to set how much the disc bends. Like a real disc, it bends more as it slows down.</li>
+      </ol>
+      <p>Get the disc into the chain basket in as few throws as you can. The arrow in the bottom corner always points to the basket and shows how far away it is, and the map in the top corner shows the whole hole. Trees knock the disc down, and the long grass stops it skidding. You get a driver from distance and a putter once you're close. The chains are forgiving, so you can throw it in hard, but smash it dead centre at full whack and it might clang off the pole.</p>
+      <p><strong>Hole 1, "The Old Oak" (par 2):</strong> the fairway bends right around a big oak. Go straight and you'll hit the tree, so throw out to the left and curve it right round the bend.</p>
+    </details>
+  </section>
+</Base>
+<style>
+  .game-page { padding-bottom: 2rem; }
+  .title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin: .25rem 0 1rem; }
+  .back { font-weight: 700; text-decoration: none; }
+  .how { margin-top: 1.5rem; max-width: 70ch; line-height: 1.5; }
+  .how summary { font-weight: 800; cursor: pointer; }
+  .how ol { padding-left: 1.3rem; }
+  .how li { margin: .3rem 0; }
+  kbd { font: inherit; font-size: .85em; font-weight: 800; border: 2px solid var(--ink); border-radius: 6px; padding: 0 .3rem; background: #fff; }
+</style>

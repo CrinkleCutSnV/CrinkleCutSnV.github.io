@@ -19,6 +19,15 @@ export const apps: AppCard[] = [
     icon: '/icons/paper-plane.svg',
     colour: '#48cae4',
     tags: ['Game', 'Physics', 'Canvas'],
+  },
+  {
+    slug: 'disc-golf',
+    title: 'Arcade Disc Golf',
+    blurb: 'Time your taps for direction, power and curve, then bend the disc round the old oak and into the chains.',
+    emoji: '🥏',
+    icon: '/icons/disc-golf.svg',
+    colour: '#7bd389',
+    tags: ['Game', 'Physics', 'Canvas'],
     status: 'new',
   },
 ];
