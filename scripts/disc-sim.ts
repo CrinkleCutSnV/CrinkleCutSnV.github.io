@@ -67,23 +67,59 @@ check(rightCurvers.length > straightish.length * 2, 'curving round the oak is th
   // putting window: how wide is the range of power that holes out?
   const ok: number[] = [];
   for (let p = 0.01; p <= 1; p += 0.01) if (simulate(hole, lie, { aim: bearing(lie, hole.basket), power: p, curve: 0, kind }).holed) ok.push(p);
-  console.log(`  putting window from there: ${(ok[0] * 100).toFixed(0)}%–${(ok[ok.length - 1] * 100).toFixed(0)}% power`);
+  console.log(`  putting window from there (dead-centre aim): ${(ok[0] * 100).toFixed(0)}%–${(ok[ok.length - 1] * 100).toFixed(0)}% power`);
 }
 
-// 4. a hard throw at the basket still counts
-for (const [label, from, kind, power] of [
-  ['full-power putt from 6 m', { x: hole.basket.x - 6, y: hole.basket.y + 1 }, PUTTER, 1],
-  ['full-power putt from 18 m', { x: hole.basket.x - 18, y: hole.basket.y + 2 }, PUTTER, 1],
-  ['full-power driver from 30 m (slightly off centre)', { x: hole.basket.x - 30, y: hole.basket.y + 0.5 }, DRIVER, 1],
-] as const) {
-  const r = simulate(hole, from, { aim: bearing(from, hole.basket) + 0.012, power: power, curve: 0, kind });
-  check(r.holed, `${label}: ${r.holed ? `caught by the chains at ${r.disc.catchSpeed.toFixed(1)} m/s` : `not holed (${r.events.join(', ')})`}`);
+// 4. the chains: catch rate by power, over putts that are on target (line passes within
+//    the catch radius), for the putter from 6 m and 15 m, and the driver from 20-30 m
+type Out = { chains: number; clang: number; skip: number; short: number; n: number };
+function rate(dist: number, kind: typeof PUTTER, power: number): Out {
+  const from = { x: hole.basket.x - dist, y: hole.basket.y + 0.4 };
+  const base = bearing(from, hole.basket);
+  const o: Out = { chains: 0, clang: 0, skip: 0, short: 0, n: 0 };
+  for (let m = -0.94; m <= 0.94001; m += 0.02) {
+    const r = simulate(hole, from, { aim: base + Math.atan2(m, dist), power, curve: 0, kind });
+    o.n++;
+    if (r.holed) o.chains++;
+    else if (r.events.includes('clang')) o.clang++;
+    else if (r.events.includes('skip')) o.skip++;
+    else o.short++;
+  }
+  return o;
+}
+const pct = (k: number, n: number) => `${Math.round((100 * k) / n)}%`.padStart(4);
+const row = (label: string, o: Out) => console.log(`  ${label.padEnd(22)} in ${pct(o.chains, o.n)}  clang ${pct(o.clang, o.n)}  skip ${pct(o.skip, o.n)}  short ${pct(o.short, o.n)}`);
+const table: Record<string, Out> = {};
+for (const [dist, kind, powers] of [[6, PUTTER, [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]], [15, PUTTER, [0.6, 0.7, 0.8, 0.9, 1]], [20, DRIVER, [0.4, 0.6, 1]], [25, DRIVER, [0.5, 0.7, 1]], [30, DRIVER, [0.5, 0.7, 1]]] as const) {
+  console.log(`  ${kind.name} from ${dist} m (on-target throws, straight):`);
+  for (const p of powers) { const o = rate(dist, kind, p); table[`${kind.name}${dist}@${p}`] = o; row(`${(p * 100).toFixed(0)}% power`, o); }
+}
+const r6 = (p: number) => table[`Putter6@${p}`].chains / table[`Putter6@${p}`].n;
+check([0.3, 0.4, 0.5, 0.6, 0.7].every((p) => r6(p) >= 0.95), 'sensible putts (30–70%) from 6 m go in reliably');
+check(r6(1) <= 0.6 && r6(1) >= 0.15, `full-power putt from 6 m only goes in when fairly central (${Math.round(r6(1) * 100)}%)`);
+{
+  const hard = ['Driver20@1', 'Driver25@1', 'Driver30@1'].map((k) => table[k]);
+  const caught = hard.reduce((a, o) => a + o.chains, 0) / hard.reduce((a, o) => a + o.n, 0);
+  check(caught <= 0.25, `a hard driver into the basket from 20–30 m usually bounces out (caught ${Math.round(caught * 100)}%)`);
+}
+// misses don't fly off miles away
+{
+  let far = 0;
+  for (const [dist, kind] of [[6, PUTTER], [25, DRIVER]] as const) {
+    const from = { x: hole.basket.x - dist, y: hole.basket.y + 0.4 };
+    for (let m = -0.94; m <= 0.94001; m += 0.04) {
+      const r = simulate(hole, from, { aim: bearing(from, hole.basket) + Math.atan2(m, dist), power: 1, curve: 0, kind });
+      if (!r.holed) far = Math.max(far, distTo(r.disc, hole.basket));
+    }
+  }
+  check(far < 9, `a clang or skip at full power ends up close by (furthest ${far.toFixed(1)} m from the basket)`);
 }
 {
-  const from = { x: hole.basket.x - 20, y: hole.basket.y };
-  const r = simulate(hole, from, { aim: bearing(from, hole.basket), power: 1, curve: 0, kind: DRIVER });
-  console.log(`  dead-centre full-power driver from 20 m: ${r.holed ? `holed at ${r.disc.catchSpeed.toFixed(1)} m/s` : r.events.join(', ')} (only this, dead-centre at full whack, clangs off the pole)`);
+  const from = { x: hole.basket.x - 6, y: hole.basket.y };
+  const r = simulate(hole, from, { aim: bearing(from, hole.basket), power: 1, curve: 0, kind: PUTTER });
+  check(r.holed, `dead-centre full-power putt from 6 m still goes in (${r.disc.catchSpeed.toFixed(1)} m/s)`);
 }
+
 // 5. rough is slower than fairway
 {
   // the same 40 m drive landing on fairway vs rough

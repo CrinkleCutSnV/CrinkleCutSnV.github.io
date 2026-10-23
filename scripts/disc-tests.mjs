@@ -35,7 +35,23 @@ check(await G(() => window.__discGolf.stage) === 'aim', 'starts on the direction
 const a1 = await G(() => window.__discGolf.aim); await page.waitForTimeout(350);
 const a2 = await G(() => window.__discGolf.aim);
 check(Math.abs(a1 - a2) > 0.05, 'direction arrow sweeps');
-await page.waitForTimeout(200);
+{
+  // measure the sweep: time between two turnarounds
+  const ts = await page.evaluate(async () => {
+    const out = []; let prev = window.__discGolf.aim, dir = 0;
+    const t0 = performance.now();
+    while (performance.now() - t0 < 2600 && out.length < 3) {
+      await new Promise((r) => requestAnimationFrame(r));
+      const a = window.__discGolf.aim, d = Math.sign(a - prev);
+      if (dir && d && d !== dir) out.push(performance.now());
+      if (d) dir = d; prev = a;
+    }
+    return out;
+  });
+  const cycle = ts.length >= 3 ? (ts[2] - ts[0]) / 1000 : NaN;
+  check(Math.abs(cycle - 1.6) < 0.15, `direction sweep takes ${cycle.toFixed(2)} s per full cycle`);
+}
+await page.waitForFunction(() => Math.abs(window.__discGolf.aim - window.__discGolf.lineToBasket() + 0.45) < 0.05);
 await shot('disc-01-tee-direction.png');
 await game.click({ position: { x: 600, y: 300 } });
 check(await G(() => window.__discGolf.stage) === 'power', 'click locks direction, moves to power');
@@ -66,9 +82,9 @@ const afterDrive = await G(() => { const d = window.__discGolf.disc, b = window.
 check(afterDrive < 22, `drive round the oak leaves ${afterDrive.toFixed(1)} m (putter range)`);
 await page.waitForTimeout(500);
 await shot('disc-05-putt-lie.png');
-await G(() => window.__discGolf.throwWith(0, 1, 0)); // full-power putt straight at it
+await G(() => window.__discGolf.throwWith(0, 0.55, 0)); // a sensible putt straight at it
 await waitStage(page, 'holed|aim');
-check(await G(() => window.__discGolf.stage) === 'holed', 'full-power putt is caught by the chains');
+check(await G(() => window.__discGolf.stage) === 'holed', 'a 55% putt from there is caught by the chains');
 await page.waitForTimeout(250);
 await shot('disc-06-chains.png');
 await waitStage(page, 'done');
@@ -79,6 +95,25 @@ check(/Par/.test(card) && /2 throws/.test(card), `end card: ${card.replace(/\s+/
 check(await G(() => localStorage.getItem('crinklecut.discGolf.best.0')) === '2', 'best score saved');
 await page.click('[data-again]');
 check(await G(() => window.__discGolf.stage) === 'aim' && await G(() => window.__discGolf.strokes) === 0, 'Play again resets the hole');
+
+// same drive, then a full-power putt that's a bit off centre: too hot, it bounces out
+for (const [offM, want, file] of [[0.42, 'clang', 'disc-11-clang.png'], [0.7, 'skip', 'disc-12-skip.png']]) {
+  await page.reload(); await page.waitForTimeout(700);
+  await G(() => window.__discGolf.throwWith(-26, 0.98, 0.7));
+  await waitStage(page, 'aim');
+  const off = await page.evaluate((m) => { const d = window.__discGolf.disc, b = window.__discGolf.hole().basket; return (Math.atan2(m, Math.hypot(b.x - d.x, b.y - d.y)) * 180) / Math.PI; }, offM);
+  await page.evaluate((o) => window.__discGolf.throwWith(o, 1, 0), off);
+  await page.waitForFunction(() => ['clang', 'skip'].includes(window.__discGolf.lastEvent) || window.__discGolf.stage === 'holed', null, { timeout: 8000 });
+  const ev = await G(() => window.__discGolf.lastEvent);
+  await page.waitForTimeout(180);
+  await shot(file);
+  check(ev === want, `full-power putt ${offM} m off centre: ${ev} (toast "${(await page.locator('[data-toast]').innerText()).trim()}")`);
+  await waitStage(page, 'aim');
+  const left = await G(() => { const d = window.__discGolf.disc, b = window.__discGolf.hole().basket; return Math.hypot(b.x - d.x, b.y - d.y); });
+  check(left < 8, `...and it ends up ${left.toFixed(1)} m from the basket`);
+}
+await page.reload();
+await page.waitForTimeout(800);
 
 // straight at the basket hits the oak
 await G(() => window.__discGolf.throwWith(0, 1, 0));

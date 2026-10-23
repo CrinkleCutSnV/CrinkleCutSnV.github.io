@@ -8,7 +8,7 @@ const BEST_KEY = 'crinklecut.discGolf.best.'; // + hole index
 const VIEW_M = 30; // metres visible across the shorter side of the screen
 
 // Selector timings (seconds for a full back-and-forth)
-const AIM_PERIOD = 2.6;
+const AIM_PERIOD = 1.6;
 const AIM_SWING = (70 * Math.PI) / 180; // either side of the line to the basket
 const POWER_PERIOD = 1.15; // "fairly quick"
 const CURVE_PERIOD = 1.6;
@@ -67,6 +67,7 @@ export function initDiscGolf(root: HTMLElement) {
   let cam = { x: hole.tee.x, y: hole.tee.y };
   let chainsT = -1; // time since the chains caught it
   let clangT = -1;
+  let bounceT = -1; // time since the disc bounced off the basket (for the hop)
   let time = 0;
   let lastThrow: Throw | null = null;
   let lastEvent: Disc['event'] = null;
@@ -158,7 +159,8 @@ export function initDiscGolf(root: HTMLElement) {
 
   function onEvent(ev: NonNullable<Disc['event']>) {
     if (ev.kind === 'tree') toast(ev.speed > 14 ? 'THWACK! Straight into a tree.' : 'Clipped a branch!');
-    else if (ev.kind === 'clang') { clangT = 0; toast('CLANG! Off the pole. Too hot!'); }
+    else if (ev.kind === 'clang') { clangT = 0; bounceT = 0; toast(ev.speed > 20 ? 'CLANG! Way too hot!' : 'CLANG! Spat out by the chains'); }
+    else if (ev.kind === 'skip') { clangT = 0.25; bounceT = 0; toast('Skipped past!'); }
     else if (ev.kind === 'edge') toast('Into the hedge!');
     else if (ev.kind === 'pole') toast('Tink! Bumped the pole.');
     else if (ev.kind === 'land' && surfaceAt(hole, disc) === 'rough') toast('In the rough');
@@ -186,7 +188,7 @@ export function initDiscGolf(root: HTMLElement) {
     holeIdx = idx; hole = HOLES[idx];
     disc = restingDisc(hole.tee);
     strokes = 0; throwsPath = []; path = [];
-    chainsT = -1; clangT = -1;
+    chainsT = -1; clangT = -1; bounceT = -1;
     cam = { x: hole.tee.x, y: hole.tee.y };
     hud.end.classList.add('is-hidden');
     resize();
@@ -240,6 +242,7 @@ export function initDiscGolf(root: HTMLElement) {
     time += dt; stageT += dt;
     if (chainsT >= 0) chainsT += dt;
     if (clangT >= 0) clangT += dt;
+    if (bounceT >= 0) bounceT += dt;
 
     if (stage === 'aim') aim = lineToBasket() + AIM_SWING * (2 * tri(stageT / AIM_PERIOD + 0.25) - 1);
     else if (stage === 'power') power = tri(stageT / POWER_PERIOD);
@@ -294,7 +297,9 @@ export function initDiscGolf(root: HTMLElement) {
     const aiming = stage === 'aim' || stage === 'power' || stage === 'curve';
     if (aiming) drawAim(ctx, c, disc, aim, stage === 'aim' ? -1 : power, stage === 'curve' ? curve : 0, stage, time - flash);
     drawBasket(ctx, hole.basket, c, chainsT, clangT, time);
-    drawDisc(ctx, disc, c, stage === 'holed' || stage === 'done');
+    // a little hop as it comes off the basket
+    const hop = bounceT >= 0 && bounceT < 1 ? 1.1 * Math.abs(Math.sin(bounceT * Math.PI * 2.4)) * Math.exp(-bounceT * 3.2) : 0;
+    drawDisc(ctx, hop ? { ...disc, z: disc.z + hop } : disc, c, stage === 'holed' || stage === 'done');
 
     // ---- overlays ----
     drawMinimap(ctx, minimap, mm, hole, disc, throwsPath, { x: cam.x - w / 2 / ppm, y: cam.y - h / 2 / ppm, w: w / ppm, h: h / ppm });
@@ -443,6 +448,7 @@ export function initDiscGolf(root: HTMLElement) {
     get curve() { return curve; },
     get aim() { return aim; },
     get lastThrow() { return lastThrow; },
+    get lastEvent() { return lastEvent ? lastEvent.kind : null; },
     hole: () => hole,
     lineToBasket,
     /** throw with aim given in degrees relative to the line to the basket (+ = right) */

@@ -42,9 +42,17 @@ export const PHYS = {
   skidKeep: { fairway: 0.6, tee: 0.6, rough: 0.2 } as Record<Surface, number>,
   friction: { fairway: 4, tee: 4, rough: 12 } as Record<Surface, number>, // m/s² while sliding
   treeBounce: 0.32,
-  catchRadius: 0.95, // m: a flying disc this close to the pole is caught by the chains
-  clangSpeed: 31, // m/s: only faster than this...
-  clangCore: 0.22, // ...and dead-centre on the pole does it clang off
+  // The chains: a slow disc anywhere within catchRadius of the pole drops in. Above
+  // catchSoftSpeed the disc has to be more and more central to be caught, down to
+  // catchMinRadius at catchHardSpeed and beyond. Anything that isn't caught either
+  // clangs off the pole/chains (if it was fairly central) or skips past off the edge.
+  catchRadius: 0.95, // m
+  catchSoftSpeed: 10.5, // m/s
+  catchHardSpeed: 22, // m/s
+  catchMinRadius: 0.12, // m
+  clangCore: 0.45, // m: missing the pole by less than this (and not caught) is a clang
+  clangKeep: 0.18, clangMax: 4.5, // bounce-back speed: fraction, cap (m/s)
+  skipKeep: 0.4, skipMax: 7, // carry-on speed after skipping past: fraction, cap (m/s)
   poleRadius: 0.22, // a sliding disc bumps the pole
   launchHeight: 1.1,
 };
@@ -128,7 +136,7 @@ export interface Disc {
   curve: number; // -1 hard left .. +1 hard right
   t: number;
   spin: number; // visual rotation
-  event: null | { kind: 'tree' | 'chains' | 'clang' | 'pole' | 'land' | 'edge' | 'stop'; t: number; speed: number };
+  event: null | { kind: 'tree' | 'chains' | 'clang' | 'skip' | 'pole' | 'land' | 'edge' | 'stop'; t: number; speed: number };
   catchSpeed: number;
 }
 
@@ -193,24 +201,23 @@ export function step(hole: Hole, d: Disc, dt = FIXED_DT) {
     d.z = Math.max(0.05, PHYS.launchHeight + 1.6 * Math.sin(Math.PI * prog) - PHYS.launchHeight * prog * prog);
     d.spin += dt * (8 + v);
 
-    // chains: generous catch radius, checked along the whole step
+    // chains: checked along the whole step
     const hit = segDist(hole.basket, { x: px, y: py }, d);
     if (hit.d <= PHYS.catchRadius) {
-      // how far the line of flight misses the pole by
-      const miss = Math.abs((d.vx * (hole.basket.y - py) - d.vy * (hole.basket.x - px)) / Math.max(0.001, v));
-      if (v > PHYS.clangSpeed && miss <= PHYS.clangCore) {
-        // smacked dead into the pole at full whack: clang, and it drops
-        bounceOff(d, hole.basket, PHYS.poleRadius + 0.2, 0.15);
-        d.phase = 'ground'; d.z = 0;
-        d.event = { kind: 'clang', t: d.t, speed: v };
+      const res = basketOutcome(v, hole.basket, { x: px, y: py }, d);
+      if (res.kind === 'chains') {
+        d.x = hole.basket.x + (d.x - hole.basket.x) * 0.15;
+        d.y = hole.basket.y + (d.y - hole.basket.y) * 0.15;
+        d.vx = d.vy = 0; d.z = 0.9;
+        d.phase = 'holed';
+        d.catchSpeed = v;
+        d.event = { kind: 'chains', t: d.t, speed: v };
         return;
       }
-      d.x = hole.basket.x + (d.x - hole.basket.x) * 0.15;
-      d.y = hole.basket.y + (d.y - hole.basket.y) * 0.15;
-      d.vx = d.vy = 0; d.z = 0.9;
-      d.phase = 'holed';
-      d.catchSpeed = v;
-      d.event = { kind: 'chains', t: d.t, speed: v };
+      // not caught: it comes down off the basket, either back towards you or a little beyond
+      d.x = res.x; d.y = res.y; d.vx = res.vx; d.vy = res.vy;
+      d.phase = 'ground'; d.z = 0;
+      d.event = { kind: res.kind, t: d.t, speed: v };
       return;
     }
 
@@ -257,6 +264,37 @@ export function step(hole: Hole, d: Disc, dt = FIXED_DT) {
     d.phase = 'rest';
     d.event = { kind: 'edge', t: d.t, speed: v };
   }
+}
+
+/** Allowed miss distance (m) for the chains to catch a disc arriving at speed v. */
+export function catchWindow(v: number) {
+  const f = clamp((v - PHYS.catchSoftSpeed) / (PHYS.catchHardSpeed - PHYS.catchSoftSpeed), 0, 1);
+  return PHYS.catchMinRadius + (PHYS.catchRadius - PHYS.catchMinRadius) * (1 - f) * (1 - f);
+}
+
+/** What happens when a flying disc moving from p0 to p1 at speed v reaches the basket. */
+export function basketOutcome(v: number, basket: Vec, p0: Vec, p1: Vec) {
+  const dx = p1.x - p0.x, dy = p1.y - p0.y;
+  const l = Math.hypot(dx, dy) || 1;
+  const ux = dx / l, uy = dy / l;
+  // closest approach to the pole along this line, and which side of it the disc passes
+  const along = (basket.x - p0.x) * ux + (basket.y - p0.y) * uy;
+  const side = (basket.y - p0.y) * ux - (basket.x - p0.x) * uy; // >0: pole is to the disc's right
+  const miss = Math.abs(side);
+  if (miss <= catchWindow(v)) return { kind: 'chains' as const, miss, x: 0, y: 0, vx: 0, vy: 0 };
+  const cx = p0.x + ux * along, cy = p0.y + uy * along;
+  const away = side > 0 ? -1 : 1; // sideways, away from the pole (unit normal is (-uy, ux))
+  const nx = -uy * away, ny = ux * away;
+  if (miss <= PHYS.clangCore) {
+    // CLANG: knocked back off the pole and chains, kicked a little to the side
+    const sp = Math.min(v * PHYS.clangKeep, PHYS.clangMax);
+    return { kind: 'clang' as const, miss, x: cx - ux * 0.5 + nx * 0.2, y: cy - uy * 0.5 + ny * 0.2, vx: (-ux * 0.8 + nx * 0.6) * sp, vy: (-uy * 0.8 + ny * 0.6) * sp };
+  }
+  // skipped off the edge of the basket: deflected away and drops a short way beyond
+  const sp = Math.min(v * PHYS.skipKeep, PHYS.skipMax);
+  const turn = 0.25 + 0.5 * (1 - (miss - PHYS.clangCore) / (PHYS.catchRadius - PHYS.clangCore));
+  const c = Math.cos(turn), s = Math.sin(turn);
+  return { kind: 'skip' as const, miss, x: cx + nx * 0.15, y: cy + ny * 0.15, vx: (ux * c + nx * s) * sp, vy: (uy * c + ny * s) * sp };
 }
 
 export interface SimResult { disc: Disc; path: Vec[]; holed: boolean; events: string[]; time: number }
