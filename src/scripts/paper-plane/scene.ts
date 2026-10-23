@@ -501,16 +501,17 @@ export function drawDoorway(v: View) {
   rr(ctx, bx0, by0, bw, bh, 4); ctx.stroke();
 }
 
-/** Speed streaks behind a fast, boosted plane. */
-export function drawWhoosh(v: View, x: number, y: number, vx: number, vy: number, t: number) {
+/** Speed streaks behind a swooping plane; `strength` (0..1) sets how bold they are. */
+export function drawWhoosh(v: View, x: number, y: number, vx: number, vy: number, t: number, strength = 1) {
   const { ctx, ppm } = v;
   const sp = Math.hypot(vx, vy) || 1;
   const ux = vx / sp, uy = vy / sp;
   ctx.save();
   ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.strokeStyle = `rgba(255,255,255,${(0.35 + 0.55 * strength).toFixed(2)})`;
   ctx.lineWidth = Math.max(1.5, ppm * 0.018);
-  for (let k = -1; k <= 1; k++) {
+  const n = strength < 0.5 ? 0 : 1; // a gentle swoop gets a single streak
+  for (let k = -n; k <= n; k++) {
     const off = k * 0.11;
     const wob = Math.sin(t * 40 + k * 2) * 0.04;
     const bx = x - ux * (0.45 + wob) - uy * off, by = y - uy * (0.45 + wob) + ux * off;

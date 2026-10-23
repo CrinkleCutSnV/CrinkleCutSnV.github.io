@@ -15,18 +15,42 @@ export const WORLD = {
   door: { x: 6.5, depth: 0.45, bottom: 2.7 },
 };
 
-// Secret dive boost: a plane that dives fast enough "bites" the air and swoops out
-// of the dive with extra lift, then glides on with less drag while it's still fast.
+// Secret swoop: a plane that dives "bites" the air and swoops out of the dive with
+// extra lift, then glides on with less drag while it's still fast. It's graded: the
+// swoop strength (0..1) grows smoothly with how steep and how fast the dive is, so a
+// shallow downward flick gives a small boost and a steep, fast dive the full swoop.
+// There's no "too steep" cut-off: a very steep dive still swoops at full strength, but
+// the pull-out is limited by how much lift the wing can make (it can't turn instantly),
+// so from a normal height it simply runs out of room and hits the floor.
 export const DIVE = {
-  armSpeed: 11.5, // m/s airspeed needed while diving
-  armAngle: (-18 * Math.PI) / 180, // flight path must be at least this steep downwards
-  pullG: 8, // nose comes up to pull this many g while pulling out of the dive
-  pullLag: 0.07, // and responds much faster than normal
-  swoopTop: (10 * Math.PI) / 180, // stop the hard pull once climbing at this angle
-  levelGain: 1.2, // how firmly the boosted glide levels off afterwards
-  glideDrag: 0.5, // drag multiplier while boosted
+  fullAngle: (-20 * Math.PI) / 180, // full strength once the path is this steep (0 at level)
+  speedFrom: 9, // m/s: no swoop below this airspeed...
+  speedFull: 12, // ...full strength from this airspeed (smooth ramp in between)
+  minStrength: 0.01, // below this the plane just flies normally
+  pullG: 8, // at full strength the nose comes up to pull this many g...
+  pullLag: 0.07, // ...and responds much faster than normal
+  // The extra lift fades out as the path levels and starts to climb (and as the plane
+  // slows). There's no hard stop: a dive that's too fast carries on up and can balloon
+  // into the ceiling or the doorway beam.
+  fadeFrom: (-15 * Math.PI) / 180, // extra lift starts fading as the path comes up through here...
+  fadeTo: (5 * Math.PI) / 180, // ...and is gone by this climb angle
+  fadeSpeed: 1.2, // and it fades out over this many m/s above endSpeed
+  levelGain: 1.2, // after the swoop, how firmly a sinking boosted glide is held up
+  glideDrag: 0.45, // drag multiplier while boosted at full strength
   endSpeed: 6.5, // boost wears off below this speed
+  boostedFrom: 0.25, // strength that counts as "a swoop" for remarks and speed streaks
 };
+
+/** Hermite smoothstep: 0 at e0, 1 at e1, smooth in between. */
+export function smoothstep(e0: number, e1: number, x: number) {
+  const t = clamp((x - e0) / (e1 - e0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+/** Swoop strength (0..1) for a flight path angle (radians, negative = down) and airspeed. */
+export function swoopStrength(gamma: number, speed: number) {
+  return smoothstep(0, -DIVE.fullAngle, -gamma) * smoothstep(DIVE.speedFrom, DIVE.speedFull, speed);
+}
 
 export const AERO = {
   liftK: 0.27, // lift accel = liftK * v^2 * liftCurve(alpha)
@@ -59,7 +83,9 @@ export interface Plane {
   maxHeight: number;
   ceilingHits: number;
   boost: Boost;
-  boosted: boolean; // did the dive boost trigger at any point?
+  boosted: boolean; // did a real swoop (strength >= DIVE.boostedFrom) happen?
+  swoop: number; // swoop strength 0..1 (the most the dive earned)
+  gPrev: number; // flight path angle last step (to spot the top of the swoop)
   crashed: null | 'lintel';
 }
 
@@ -87,6 +113,8 @@ export function restingPlane(): Plane {
     ceilingHits: 0,
     boost: 0,
     boosted: false,
+    swoop: 0,
+    gPrev: 0,
     crashed: null,
   };
 }
@@ -108,6 +136,8 @@ export function launchPlane(l: Launch): Plane {
     ceilingHits: 0,
     boost: 0,
     boosted: false,
+    swoop: 0,
+    gPrev: 0,
     crashed: null,
   };
 }
@@ -164,31 +194,44 @@ export function step(p: Plane, dt = FIXED_DT): Plane {
   const speed = Math.hypot(p.vx, p.vy);
   const gamma = Math.atan2(p.vy, p.vx); // flight path angle
 
-  // secret dive boost state machine
-  if (p.boost === 0 && gamma < DIVE.armAngle && speed > DIVE.armSpeed) {
-    p.boost = 1;
-    p.boosted = true;
+  // secret swoop state machine: while diving, the strength grows with the steepest,
+  // fastest part of the dive (it never shrinks during the pull-out)
+  if (p.boost === 0 || p.boost === 1) {
+    const s = swoopStrength(gamma, speed);
+    if (s > p.swoop) p.swoop = s;
+    if (p.boost === 0 && p.swoop >= DIVE.minStrength) p.boost = 1;
+    if (p.swoop >= DIVE.boostedFrom) p.boosted = true;
   }
-  if (p.boost === 1 && gamma > DIVE.swoopTop) p.boost = 2;
+  // the pull ends at the top of the swoop (the path stops rising)
+  if (p.boost === 1 && gamma > 0 && gamma < p.gPrev) p.boost = 2;
+  p.gPrev = gamma;
   if ((p.boost === 1 || p.boost === 2) && speed < DIVE.endSpeed) p.boost = 3;
-  const dragMul = p.boost === 1 || p.boost === 2 ? DIVE.glideDrag : 1;
+  const fs = smoothstep(DIVE.endSpeed, DIVE.endSpeed + DIVE.fadeSpeed, speed);
+  const k = p.swoop * fs; // strength right now (fades as the plane slows)
+  const dragMul = p.boost === 1 || p.boost === 2 ? 1 - (1 - DIVE.glideDrag) * k : 1;
 
   // Pitch: the nose chases "flight path + trim angle". Paper planes are pitch-stable,
   // so the trim angle shrinks as speed rises (the nose drops when fast), and the lag
   // lets a slow plane rear up and stall, or a dipping plane flare into a glide.
   const sp = Math.max(speed, 0.5);
   const targetAlpha = clamp(AERO.trimAlpha * (AERO.trimSpeed / sp) ** 2, (-2 * Math.PI) / 180, (16 * Math.PI) / 180);
-  let target = gamma + targetAlpha;
+  const normal = gamma + targetAlpha;
+  let target = normal;
   let lag = AERO.pitchLag;
   if (p.boost === 1) {
-    // dive boost: the plane "bites" and pitches up to pull several g
+    // swoop: the plane "bites" and pitches up to pull several g. The angle of attack is
+    // capped at the stall angle (the wing's maximum lift), so the turn rate is limited.
     const pullAlpha = (AERO.alphaRef * DIVE.pullG * WORLD.gravity) / (AERO.liftK * sp * sp);
-    target = gamma + Math.min(pullAlpha, AERO.stallAlpha);
-    lag = DIVE.pullLag;
-  } else if (p.boost === 2) {
-    // after the swoop: hold the nose so the path eases back to level (no runaway climb)
-    const want = Math.max(0, WORLD.gravity * Math.cos(gamma) - DIVE.levelGain * gamma * sp);
-    target = gamma + Math.min((AERO.alphaRef * want) / (AERO.liftK * sp * sp), AERO.stallAlpha);
+    // (a gentle swoop fades out nearer level; a full one carries on up into a climb)
+    const kp = k * (1 - smoothstep(DIVE.fadeFrom * p.swoop, DIVE.fadeTo * p.swoop, gamma));
+    target = normal + kp * (gamma + Math.min(pullAlpha, AERO.stallAlpha) - normal);
+    lag = AERO.pitchLag + k * (DIVE.pullLag - AERO.pitchLag);
+  } else if (p.boost === 2 && gamma < 0) {
+    // after the swoop, once it starts to sink again: hold the nose up a little so a
+    // fast plane stretches its glide (nothing stops it climbing; that's up to you)
+    const want = WORLD.gravity * Math.cos(gamma) - DIVE.levelGain * gamma * sp;
+    const level = gamma + Math.min((AERO.alphaRef * want) / (AERO.liftK * sp * sp), AERO.stallAlpha);
+    target = normal + k * (level - normal);
   }
   p.pitch += wrapAngle(target - p.pitch) * Math.min(1, dt / lag);
 
@@ -267,5 +310,5 @@ export function distanceOf(p: Plane) {
 export function simulate(l: Launch) {
   const p = launchPlane(l);
   while (p.phase !== 'stopped') step(p);
-  return { distance: distanceOf(p), time: p.time, maxHeight: p.maxHeight, ceilingHits: p.ceilingHits, boosted: p.boosted, crashed: p.crashed };
+  return { distance: distanceOf(p), time: p.time, maxHeight: p.maxHeight, ceilingHits: p.ceilingHits, boosted: p.boosted, swoop: p.swoop, crashed: p.crashed };
 }

@@ -11,7 +11,8 @@
     "shots:features": "node scripts/feature-shots.mjs",
     "check:disc": "esbuild scripts/disc-sim.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/disc-sim.mjs --format=esm && node node_modules/.cache/disc-sim.mjs",
     "test:disc": "node scripts/disc-tests.mjs",
-    "test:scores": "node scripts/scores-tests.mjs"
+    "test:scores": "node scripts/scores-tests.mjs",
+    "test:swoop": "node scripts/swoop-tests.mjs"
   },
   "dependencies": {
     "astro": "^5.18.2",

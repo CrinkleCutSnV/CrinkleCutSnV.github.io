@@ -39,6 +39,7 @@ function remarkFor(d: number, p: Plane) {
     if (d >= 95) return 'What a swoop! That plane has clearly done this before.';
     return 'Ooh, a swooper! Was that skill or luck?';
   }
+  if (p.swoop >= 0.1 && p.swoop < 0.6 && d >= 30) return 'Did it just swoop a little? Interesting…';
   if (d < 2) return 'Nosedive into the bin. It happens to the best of us.';
   if (d < 8) return 'Made it past the desk. Gentle start!';
   if (d < 20) return 'Respectable. Halfway to the kettle.';
@@ -390,8 +391,8 @@ export function initPaperPlane(root: HTMLElement) {
     }
     if (plane.phase !== 'ready' || dragging) drawShadow(v, plane.x, plane.y);
     if (dragging && preview) drawAim(v, preview);
-    if ((plane.boost === 1 || plane.boost === 2) && Math.hypot(plane.vx, plane.vy) > 8.5) {
-      drawWhoosh(v, plane.x, plane.y, plane.vx, plane.vy, performance.now() / 1000);
+    if ((plane.boost === 1 || plane.boost === 2) && plane.swoop >= 0.1 && Math.hypot(plane.vx, plane.vy) > 8.5) {
+      drawWhoosh(v, plane.x, plane.y, plane.vx, plane.vy, performance.now() / 1000, plane.swoop);
     }
     drawPlane(v, plane.x, plane.y, plane.pitch);
     if (bonk) drawBonk(v, bonk.x, bonk.y, performance.now() / 1000 - bonk.t);
@@ -408,6 +409,8 @@ export function initPaperPlane(root: HTMLElement) {
     get camX() { return camX; },
     get boost() { return plane.boost; },
     get boosted() { return plane.boosted; },
+    get swoop() { return plane.swoop; },
+    get trail() { return trail.length; },
     get crashed() { return plane.crashed; },
     get doorX() { return WORLD.door.x; },
     get x() { return plane.x; },
