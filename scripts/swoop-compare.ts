@@ -58,8 +58,9 @@ for (const [name, m] of [['BEFORE', OLD], ['AFTER', NEW]] as const) {
 console.log('\nExamples (after):');
 const ex: [string, L][] = [
   ['good swoop', { x: 0.3, y: 2.1, speed: 16, angle: d(-20) }],
-  ['over-swoop', { x: 0, y: 2.5, speed: 16, angle: d(-22) }],
-  ['shallow flick', { x: 0.3, y: 1.8, speed: 14, angle: d(-6) }],
+  ['over-swoop', { x: 0.3, y: 2.5, speed: 16, angle: d(-20) }],
+  ['barely down', { x: 0.3, y: 1.8, speed: 14, angle: d(-5) }],
+  ['flick', { x: 0.3, y: 1.8, speed: 14, angle: d(-10) }],
   ['too steep', { x: 0.3, y: 1.8, speed: 16, angle: d(-30) }],
   ['too low', { x: 0.3, y: 1.0, speed: 16, angle: d(-20) }],
 ];
