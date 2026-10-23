@@ -1,0 +1,257 @@
+---
+import Base from '../../layouts/Base.astro';
+import { gameScores } from '../../data/scores';
+import { TIERS, TIER_NAME, bandLabel } from '../../data/medals';
+const withMedals = gameScores.filter((g) => g.medals);
+---
+<Base title="My best scores · CrinkleCutSnV's playground" description="Your best scores from every game in CrinkleCutSnV's playground, saved in this browser.">
+  <section class="wrap hero">
+    <h1>My best <span class="squiggle">scores</span> 🏆</h1>
+    <p class="lede">Every personal best from the playground, all in one place.</p>
+    <p class="note" data-note>
+      <span aria-hidden="true">💾</span>
+      <span>Scores are saved <strong>in this browser on this device only</strong>. They won't follow you to another phone, computer or browser, and clearing your browsing data wipes them.</span>
+    </p>
+    {withMedals.length > 0 && (
+      <div class="gold-line" data-gold-line>
+        <span class="gold-label"><span aria-hidden="true">🥇</span> Gold in every game: <strong data-gold-count>0 of {withMedals.length}</strong></span>
+        <span class="gold-bar" aria-hidden="true"><span data-gold-bar></span></span>
+        <span class="gold-msg" data-gold-msg></span>
+      </div>
+    )}
+  </section>
+
+  <section class="wrap grid" aria-label="Best scores by game">
+    {gameScores.map((g) => (
+      <article class="score-card" data-game={g.slug} style={`--c:${g.colour}`}>
+        <div class="art">
+          {g.icon ? <img class="icon" src={g.icon} alt="" width="84" height="63" /> : <span class="emoji" aria-hidden="true">{g.emoji}</span>}
+          <h2>{g.title}</h2>
+        </div>
+        <div class="body">
+          {g.medals && (
+            <div class="medals" data-medals={g.medals.key}>
+              <p class="medals-head"><span data-medal-best>No medal yet</span><span class="date" data-medal-date></span></p>
+              <ul>
+                {TIERS.map((t) => (
+                  <li data-tier={t}>
+                    <span class="medal medal--none" aria-hidden="true"><span class="medal-ribbon"></span><span class="medal-face">★</span></span>
+                    <span class="tier-name">{TIER_NAME[t]}</span>
+                    <span class="band">{bandLabel(g.medals!, t)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p class="medals-rule">Awarded for {g.medals.measure}.</p>
+            </div>
+          )}
+          <div class="played is-hidden" data-played>
+            <div class="headline" data-stat={g.headline.key} data-format={JSON.stringify(g.headline.format)} data-role="headline">
+              <p class="label">{g.headline.label}</p>
+              <p class="big" data-value>–</p>
+              <p class="sub"><span data-extra></span><span class="date" data-date></span></p>
+            </div>
+            {g.breakdown && (
+              <div class="breakdown">
+                <h3>{g.breakdown.title}</h3>
+                <ul>
+                  {g.breakdown.stats.map((s) => (
+                    <li data-stat={s.key} data-format={JSON.stringify(s.format)} data-role="row">
+                      {s.badge && <span class="badge" aria-hidden="true">{s.badge}</span>}
+                      <span class="name">
+                        <strong>{s.badge ? `Hole ${s.badge}: ` : ''}{s.label}</strong>
+                        <small>{s.format.kind === 'strokes' ? `Par ${s.format.par}` : ''}<span class="date" data-date></span></small>
+                      </span>
+                      <span class="val"><span data-value>–</span><small data-extra></small></span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <a class="play" href={`/apps/${g.slug}/`}>Play {g.title} →</a>
+          </div>
+          <div class="empty" data-empty>
+            <p class="empty-emoji" aria-hidden="true">🫥</p>
+            <p><strong>Not played yet – have a go!</strong></p>
+            <a class="btn" href={`/apps/${g.slug}/`}>Play {g.title} →</a>
+          </div>
+        </div>
+      </article>
+    ))}
+  </section>
+
+  <section class="wrap reset" aria-label="Reset scores">
+    <button type="button" class="ghost" data-reset>Reset scores…</button>
+    <div class="confirm is-hidden" data-confirm role="alertdialog" aria-labelledby="reset-q">
+      <p id="reset-q"><strong>Wipe every best score in this browser?</strong> This can't be undone.</p>
+      <div class="confirm-buttons">
+        <button type="button" class="danger" data-reset-yes>Yes, reset them</button>
+        <button type="button" class="ghost" data-reset-no>No, keep them</button>
+      </div>
+    </div>
+    <p class="done is-hidden" data-reset-done role="status">All scores reset. Time to set some new ones!</p>
+  </section>
+</Base>
+
+<script>
+  import { allScoreKeys } from '../../data/scores';
+  import type { ScoreFormat } from '../../data/scores';
+  import { clearRecord, formatDate, readDate, readNumber, scoreName, vsPar, vsParWords } from '../../scripts/scores';
+  import { MEDAL_RULES, TIERS, TIER_NAME, tierRank } from '../../data/medals';
+  import { readMedal, readMedalDate } from '../../scripts/medals';
+
+  function renderMedals() {
+    let golds = 0, shown = 0;
+    document.querySelectorAll<HTMLElement>('[data-medals]').forEach((box) => {
+      const rule = MEDAL_RULES.find((r) => r.key === box.dataset.medals);
+      if (!rule) return;
+      shown++;
+      const best = readMedal(rule);
+      if (best === 'gold') golds++;
+      box.dataset.best = best ?? 'none';
+      box.querySelectorAll<HTMLElement>('[data-tier]').forEach((li) => {
+        const t = li.dataset.tier as (typeof TIERS)[number];
+        const won = tierRank(best) >= tierRank(t);
+        li.classList.toggle('is-won', won);
+        li.classList.toggle('is-best', best === t);
+        li.querySelector('.medal')!.className = `medal ${won ? `medal--${t}` : 'medal--none'}`;
+      });
+      box.querySelector('[data-medal-best]')!.textContent = best ? `Best medal: ${TIER_NAME[best]}` : 'No medal yet';
+      const d = best ? readMedalDate(rule) : null;
+      box.querySelector('[data-medal-date]')!.textContent = d ? `set on ${formatDate(d)}` : '';
+    });
+    const line = document.querySelector<HTMLElement>('[data-gold-line]');
+    if (line) {
+      line.querySelector('[data-gold-count]')!.textContent = `${golds} of ${shown}`;
+      line.querySelector<HTMLElement>('[data-gold-bar]')!.style.width = `${shown ? (100 * golds) / shown : 0}%`;
+      line.querySelector('[data-gold-msg]')!.textContent = golds === shown ? 'Clean sweep! 🎉' : golds ? 'Keep going!' : '';
+      line.classList.toggle('is-complete', golds === shown);
+    }
+  }
+
+  function render() {
+    document.querySelectorAll<HTMLElement>('[data-game]').forEach((card) => {
+      let any = false;
+      card.querySelectorAll<HTMLElement>('[data-stat]').forEach((el) => {
+        const key = el.dataset.stat!;
+        const fmt = JSON.parse(el.dataset.format!) as ScoreFormat;
+        const v = readNumber(key);
+        const d = readDate(key);
+        const value = el.querySelector<HTMLElement>('[data-value]')!;
+        const extra = el.querySelector<HTMLElement>('[data-extra]');
+        const date = el.querySelector<HTMLElement>('[data-date]');
+        const headline = el.dataset.role === 'headline';
+        el.classList.toggle('is-empty', v === null);
+        if (v !== null) any = true;
+        if (v === null) {
+          value.textContent = headline ? (fmt.kind === 'strokes' ? 'No full round yet' : '–') : 'Not played yet';
+          if (extra) extra.textContent = '';
+        } else if (fmt.kind === 'metres') {
+          value.textContent = `${v.toFixed(fmt.decimals ?? 1)} m`;
+          if (extra) extra.textContent = '';
+        } else {
+          value.textContent = headline ? `${v} ${v === 1 ? 'throw' : 'throws'}` : String(v);
+          if (extra) {
+            extra.textContent = headline ? vsParWords(v, fmt.par) : `${fmt.scoreName ? scoreName(v, fmt.par).replace(/!$/, '') : ''} (${vsPar(v, fmt.par)})`;
+          }
+          el.dataset.vs = String(Math.sign(v - fmt.par));
+        }
+        if (date) date.textContent = v !== null && d ? `${headline ? '' : ' · '}set on ${formatDate(d)}` : '';
+      });
+      card.querySelector('[data-played]')!.classList.toggle('is-hidden', !any);
+      card.querySelector('[data-empty]')!.classList.toggle('is-hidden', any);
+      card.classList.toggle('is-played', any);
+    });
+    renderMedals();
+  }
+  render();
+  window.addEventListener('storage', render); // another tab set a new record
+  window.addEventListener('pageshow', render); // coming back from a game via the back button
+
+  const $ = (s: string) => document.querySelector<HTMLElement>(s)!;
+  const resetBtn = $('[data-reset]'), confirmBox = $('[data-confirm]'), done = $('[data-reset-done]');
+  resetBtn.addEventListener('click', () => {
+    confirmBox.classList.remove('is-hidden');
+    resetBtn.classList.add('is-hidden');
+    done.classList.add('is-hidden');
+    $('[data-reset-no]').focus();
+  });
+  $('[data-reset-no]').addEventListener('click', () => {
+    confirmBox.classList.add('is-hidden');
+    resetBtn.classList.remove('is-hidden');
+    resetBtn.focus();
+  });
+  $('[data-reset-yes]').addEventListener('click', () => {
+    allScoreKeys.forEach(clearRecord);
+    render();
+    confirmBox.classList.add('is-hidden');
+    resetBtn.classList.remove('is-hidden');
+    done.classList.remove('is-hidden');
+  });
+</script>
+
+<style>
+  .hero { padding: 2.2rem 0 1.4rem; }
+  h1 { font-size: clamp(2rem, 5.5vw, 3.4rem); line-height: 1.05; margin: 0 0 .6rem; letter-spacing: -.02em; }
+  .squiggle { background: linear-gradient(transparent 62%, var(--sun) 62% 92%, transparent 92%); padding: 0 .1em; }
+  .lede { font-size: clamp(1.05rem, 2.2vw, 1.25rem); margin: 0 0 1rem; opacity: .85; }
+  .note { display: flex; gap: .6rem; align-items: flex-start; max-width: 62ch; margin: 0; background: #fff; border: 2px dashed rgba(43,45,66,.4); border-radius: 14px; padding: .6rem .85rem; line-height: 1.4; font-size: .95rem; }
+  .gold-line { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; margin-top: 1rem; font-weight: 700; }
+  .gold-bar { width: min(240px, 50vw); height: 14px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; overflow: hidden; }
+  .gold-bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #f2c94c, #ffdf6e); border-right: 2px solid var(--ink); transition: width .4s ease; }
+  .gold-bar span[style*='width: 0%'] { border-right: 0; }
+  .gold-line.is-complete .gold-label strong { background: var(--sun); padding: 0 .4rem; border-radius: 6px; }
+  .medals { margin: 0 0 1rem; padding: .6rem .7rem .55rem; border: 2px solid rgba(43,45,66,.15); border-radius: 14px; background: #fffdf6; }
+  .medals-head { display: flex; flex-wrap: wrap; gap: .2rem .6rem; align-items: baseline; font-weight: 900; font-size: 1.05rem; margin-bottom: .45rem !important; }
+  .medals[data-best='gold'] { background: #fff7d6; border-color: #f2c94c; }
+  .medals ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
+  .medals li { display: grid; justify-items: center; text-align: center; gap: .1rem; padding: .3rem .2rem; border-radius: 10px; }
+  .medals li .tier-name { font-weight: 800; font-size: .9rem; opacity: .45; }
+  .medals li .band { font-size: .78rem; font-weight: 700; opacity: .6; font-variant-numeric: tabular-nums; }
+  .medals li.is-won .tier-name { opacity: 1; }
+  .medals li.is-best { background: #fff; outline: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+  .medals li.is-best .medal { animation: medal-pop .6s cubic-bezier(.2, 1.6, .4, 1) both; }
+  .medals-rule { font-size: .78rem; opacity: .65; margin-top: .35rem !important; text-align: center; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.6rem; padding-bottom: 1.5rem; align-items: start; }
+  .score-card { background: var(--card); border: 3px solid var(--ink); border-radius: var(--radius); overflow: hidden; box-shadow: 6px 6px 0 var(--ink); }
+  .art { display: flex; align-items: center; gap: .8rem; padding: .8rem 1rem; background: radial-gradient(circle at 20% 30%, #ffffff88, transparent 60%), var(--c); border-bottom: 3px solid var(--ink); }
+  .art h2 { margin: 0; font-size: 1.3rem; }
+  .icon { width: 72px; height: auto; transform: rotate(-8deg); filter: drop-shadow(3px 4px 0 rgba(43,45,66,.25)); }
+  .emoji { font-size: 2.6rem; }
+  .body { padding: 1rem 1.1rem 1.2rem; }
+  .body p { margin: 0; }
+  .label { font-weight: 700; opacity: .7; font-size: .9rem; }
+  .big { font-size: clamp(2rem, 6vw, 2.6rem); font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .headline.is-empty .big { font-size: 1.3rem; opacity: .55; padding: .3rem 0; }
+  .sub { display: flex; flex-wrap: wrap; gap: .3rem .6rem; align-items: center; font-weight: 800; }
+  .sub [data-extra]:not(:empty) { background: var(--sun); border: 2px solid var(--ink); border-radius: 999px; padding: 0 .6rem; transform: rotate(-2deg); display: inline-block; }
+  .date { font-weight: 600; font-size: .85rem; opacity: .7; }
+  .breakdown { margin-top: 1rem; }
+  .breakdown h3 { margin: 0 0 .4rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; opacity: .65; }
+  .breakdown ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; }
+  .breakdown li { display: grid; grid-template-columns: auto 1fr auto; gap: .6rem; align-items: center; padding: .45rem .6rem; border: 2px solid rgba(43,45,66,.15); border-radius: 12px; }
+  .breakdown li .badge { display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--sun); border: 2px solid var(--ink); font-weight: 900; font-size: .85rem; }
+  .breakdown .name { display: grid; line-height: 1.25; }
+  .breakdown .name small { font-size: .8rem; opacity: .7; }
+  .breakdown .val { text-align: right; display: grid; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .breakdown .val [data-value] { font-size: 1.25rem; font-weight: 900; }
+  .breakdown .val small { font-weight: 800; font-size: .78rem; }
+  .breakdown li[data-vs='-1'] { background: #eef9e9; border-color: #7bd389; }
+  .breakdown li.is-empty .val [data-value] { font-size: .85rem; font-weight: 700; opacity: .55; }
+  .play { display: inline-block; margin-top: 1rem; font-weight: 800; }
+  .empty { text-align: center; padding: .6rem 0 .3rem; }
+  .empty-emoji { font-size: 2.4rem; }
+  .empty p { margin-bottom: .7rem; }
+  .btn, button { font: inherit; font-weight: 800; display: inline-block; text-decoration: none; background: var(--accent); color: #fff; border: 3px solid var(--ink); border-radius: 999px; padding: .5rem 1.2rem; box-shadow: 3px 3px 0 var(--ink); cursor: pointer; }
+  .btn:hover, button:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+  button.ghost { background: #fff; color: var(--ink); }
+  button.danger { background: #e63946; }
+  .reset { padding-bottom: 3rem; }
+  .confirm { background: #fff; border: 3px solid var(--ink); border-radius: 16px; box-shadow: 5px 5px 0 var(--ink); padding: .9rem 1rem; max-width: 460px; }
+  .confirm p { margin: 0 0 .7rem; }
+  .confirm-buttons { display: flex; gap: .6rem; flex-wrap: wrap; }
+  .done { font-weight: 800; margin-top: .8rem; }
+  .is-hidden { display: none !important; }
+  @media (max-width: 520px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>

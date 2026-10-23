@@ -2,6 +2,7 @@
 import {
   DRIVER, HOLES, PUTTER, bearing, launch, step, discFor, distTo, simulate, surfaceAt, type Hole, type Throw, type Vec,
 } from '../src/scripts/disc-golf/physics';
+import { DISC_GOLF_MEDALS, bandLabel, medalFor, TIERS } from '../src/data/medals';
 
 const hole = HOLES[0];
 const deg = (r: number) => (r * 180) / Math.PI;
@@ -132,6 +133,7 @@ check(r6(1) <= 0.6 && r6(1) >= 0.15, `full-power putt from 6 m only goes in when
 }
 // ---- every hole: a par route, birdie chances, and each hole's special feature ----------
 const robustTee: Record<string, Cand> = {};
+const bestRoute: number[] = [];
 type Cand = { th: Throw; r: ReturnType<typeof simulate>; score: number };
 function search(h: Hole, lie: Vec, step = 3): Cand[] {
   const kind = discFor(h, lie);
@@ -165,6 +167,7 @@ HOLES.forEach((h, i) => {
     steps.push(`${fmtTh(h, lie, best.th)} → ${best.r.holed ? 'IN' : `${distTo(best.r.lie, h.basket).toFixed(1)} m left`}`);
     holed = best.r.holed; lie = best.r.lie;
   }
+  bestRoute.push(strokes);
   check(holed && strokes <= h.par, `best-input route in ${strokes}: ${steps.join('; ')}`);
   // tee shots: how many leave a good lie, and can any be followed by a holed second (birdie)?
   const tee = search(h, h.tee);
@@ -261,6 +264,17 @@ HOLES.forEach((h, i) => {
   // a disc on the flat top stays put
   const top = simulate(h, { x: hill.x, y: hill.y + 9 }, { aim: -Math.PI / 2 + 0.25, power: 0.35, curve: 0, kind: PUTTER });
   check(distTo(top.lie, hill) <= hill.top + 0.5 || top.holed, `hole 3: a gentle putt that stops on the flat top stays there (${distTo(top.lie, hill).toFixed(1)} m from the pin)`);
+}
+
+// ---- round medals (par 8): bronze +3..+1, silver E..−1, gold −2 or better ----
+{
+  const r = DISC_GOLF_MEDALS;
+  console.log(`\nRound medals: ${TIERS.map((t) => `${t} ${bandLabel(r, t)}`).join(', ')}`);
+  const want: [number, string | null][] = [[4, null], [3, 'bronze'], [1, 'bronze'], [0, 'silver'], [-1, 'silver'], [-2, 'gold'], [-4, 'gold']];
+  check(want.every(([d, t]) => medalFor(r, d) === t), 'medal bands: +4 none, +3/+1 bronze, E/−1 silver, −2/−4 gold');
+  const par = HOLES.reduce((a, h) => a + h.par, 0);
+  const best = bestRoute.reduce((a, x) => a + x, 0);
+  check(best - par <= r.thresholds.gold, `gold is reachable: best-input routes go round in ${bestRoute.join(' + ')} = ${best} (${best - par} vs par), e.g. par on 1 and birdies on 2 and 3`);
 }
 
 console.log(failures ? `${failures} FAILED` : 'all disc golf checks passed');

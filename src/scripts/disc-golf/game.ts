@@ -3,6 +3,9 @@ import {
   type Disc, type DiscKind, type Hole, type Throw, type Vec,
 } from './physics';
 import { DRIVER as DRIVER_KIND } from './physics';
+import { saveRecord, scoreName as scoreNameBase, vsPar } from '../scores';
+import { awardMedal, medalPopHtml } from '../medals';
+import { DISC_GOLF_MEDALS } from '../../data/medals';
 import { drawBasket, drawCourse, drawDisc, drawMinimap, buildMinimap, drawAim, drawSplash, type Cam } from './scene';
 
 const BEST_KEY = 'crinklecut.discGolf.best.'; // + hole index
@@ -21,16 +24,8 @@ type Stage = 'aim' | 'power' | 'curve' | 'flying' | 'settle' | 'holed' | 'done';
 /** 0 → 1 → 0 triangle wave */
 const tri = (u: number) => 1 - Math.abs(((u % 1) + 1) % 1 * 2 - 1);
 
-function scoreName(strokes: number, par: number) {
-  if (strokes === 1) return 'ACE!';
-  const d = strokes - par;
-  return ({ [-3]: 'Albatross!', [-2]: 'Eagle!', [-1]: 'Birdie!', 0: 'Par', 1: 'Bogey', 2: 'Double bogey', 3: 'Triple bogey' } as Record<number, string>)[d]
-    ?? `+${d}`;
-}
-const vsPar = (strokes: number, par: number) => {
-  const d = strokes - par;
-  return d === 0 ? 'E' : d > 0 ? `+${d}` : `−${-d}`;
-};
+const scoreName = (strokes: number, par: number) => (strokes === 1 ? 'ACE!' : scoreNameBase(strokes, par));
+
 const REMARKS: Record<string, string[]> = {
   // [ace, under par, par, one over, two or three over, worse]
   'The Old Oak': [
@@ -83,7 +78,7 @@ export function initDiscGolf(root: HTMLElement) {
     again: $<HTMLButtonElement>('[data-again]'), next: $<HTMLButtonElement>('[data-next]'),
     endCard: $('[data-end-card]'), card: $('[data-card]'), cardBody: $('[data-card-body]'),
     cardToggle: $<HTMLButtonElement>('[data-card-toggle]'), cardClose: $<HTMLButtonElement>('[data-card-close]'),
-    banner: $('[data-banner]'),
+    banner: $('[data-banner]'), endMedal: $('[data-end-medal]'),
   };
 
   let holeIdx = 0;
@@ -117,6 +112,7 @@ export function initDiscGolf(root: HTMLElement) {
   /** throws per hole this round (null = not played yet) */
   let scores: (number | null)[] = HOLES.map(() => null);
   let lastRoundBest: { prev: number; isBest: boolean } | null = null;
+  let lastMedal: ReturnType<typeof awardMedal> | null = null;
 
   const bestOf = (i: number) => Number(localStorage.getItem(BEST_KEY + i) || 0) || 0;
   const roundBest = () => Number(localStorage.getItem(ROUND_KEY) || 0) || 0;
@@ -311,7 +307,7 @@ export function initDiscGolf(root: HTMLElement) {
     scores[holeIdx] = strokes;
     const prev = bestOf(holeIdx);
     const isBest = !prev || strokes < prev;
-    if (isBest) localStorage.setItem(BEST_KEY + holeIdx, String(strokes));
+    if (isBest) saveRecord(BEST_KEY + holeIdx, strokes);
     const holeLine = `${strokes} ${strokes === 1 ? 'throw' : 'throws'} on a par ${hole.par} · ${vsPar(strokes, hole.par)}${penalties ? ` (incl. ${penalties} penalty)` : ''}`;
     const last = isLast();
     if (last) {
@@ -319,7 +315,7 @@ export function initDiscGolf(root: HTMLElement) {
       const rb = roundBest();
       const full = scores.every((x) => x !== null);
       const rIsBest = full && (!rb || t.strokes < rb);
-      if (rIsBest) localStorage.setItem(ROUND_KEY, String(t.strokes));
+      if (rIsBest) saveRecord(ROUND_KEY, t.strokes);
       lastRoundBest = { prev: rb, isBest: rIsBest };
       hud.endTitle.textContent = `Round complete · hole ${holeIdx + 1}: ${scoreName(strokes, hole.par)}`;
       const d = t.strokes - t.par;
@@ -328,7 +324,11 @@ export function initDiscGolf(root: HTMLElement) {
       hud.endRemark.textContent = roundRemark(d);
       hud.endBest.textContent = rIsBest ? (rb ? 'New best round!' : 'First round on the board!') : rb ? `Best round: ${rb} (${vsPar(rb, coursePar)})` : 'Play all three holes for a round score';
       hud.endBest.classList.toggle('is-new', rIsBest);
+      // medals are for a full round only
+      if (full) { lastMedal = awardMedal(DISC_GOLF_MEDALS, d); hud.endMedal.innerHTML = medalPopHtml(lastMedal); }
+      hud.endMedal.classList.toggle('is-hidden', !full);
     } else {
+      hud.endMedal.classList.add('is-hidden');
       hud.endTitle.textContent = `Hole ${holeIdx + 1} · ${hole.name}`;
       hud.endScore.textContent = scoreName(strokes, hole.par);
       hud.endLine.textContent = holeLine;
@@ -606,6 +606,7 @@ export function initDiscGolf(root: HTMLElement) {
     get holeIdx() { return holeIdx; },
     get scores() { return [...scores]; },
     get penalties() { return penalties; },
+    get lastMedal() { return lastMedal; },
     get splashAt() { return splashAt; },
     roundTotals,
     coursePar,

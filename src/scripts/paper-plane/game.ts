@@ -3,6 +3,9 @@ import {
   type Launch, type Plane,
 } from './physics';
 import { drawBackground, drawBonk, drawDesk, drawDoorway, drawPlane, drawShadow, drawWhoosh, type View } from './scene';
+import { saveRecord } from '../scores';
+import { awardMedal, medalPopHtml } from '../medals';
+import { PLANE_MEDALS } from '../../data/medals';
 
 const BEST_KEY = 'crinklecut.paperPlane.best';
 const VIEW_BELOW = 0.6; // metres of floor band visible below the flight line
@@ -57,6 +60,7 @@ export function initPaperPlane(root: HTMLElement) {
     endRemark: root.querySelector<HTMLElement>('[data-end-remark]')!,
     endBest: root.querySelector<HTMLElement>('[data-end-best]')!,
     again: root.querySelector<HTMLButtonElement>('[data-again]')!,
+    endMedal: root.querySelector<HTMLElement>('[data-end-medal]')!,
   };
 
   let w = 0, h = 0, dpr = 1, ppm = 100, groundY = 0;
@@ -65,6 +69,7 @@ export function initPaperPlane(root: HTMLElement) {
   let trail: { x: number; y: number }[] = [];
   let best = Number(localStorage.getItem(BEST_KEY) || 0) || 0;
   let lastLaunch: Launch | null = null;
+  let lastMedal: ReturnType<typeof awardMedal> | null = null;
 
   // drag state
   let dragging = false;
@@ -260,11 +265,14 @@ export function initPaperPlane(root: HTMLElement) {
     const isBest = d > best + 1e-6;
     if (isBest) {
       best = d;
-      try { localStorage.setItem(BEST_KEY, String(best)); } catch { /* private mode */ }
+      saveRecord(BEST_KEY, best); // also stores the date it was set
       showBest();
     }
     hud.endDistance.textContent = `${d.toFixed(1)} m`;
     hud.endRemark.textContent = remarkFor(d, plane);
+    // medals are judged on the distance shown (one decimal place)
+    lastMedal = awardMedal(PLANE_MEDALS, Math.round(d * 10) / 10);
+    hud.endMedal.innerHTML = medalPopHtml(lastMedal);
     hud.endBest.textContent = isBest ? 'New best!' : `Best: ${best.toFixed(1)} m`;
     hud.endBest.classList.toggle('is-new', isBest);
     hud.end.classList.remove('is-hidden');
@@ -409,5 +417,12 @@ export function initPaperPlane(root: HTMLElement) {
     get readyCamX() { return readyCamX(); },
     get zone() { return { ...WORLD.throwZone }; },
     get lastRelease() { return lastRelease; },
+    get lastMedal() { return lastMedal; },
+    /** throw with an exact launch (testing): { x, y, speed, angle } */
+    launch(l: Launch) {
+      lastLaunch = l; plane = launchPlane(l); trail = [];
+      hud.hint.classList.add('is-hidden');
+      root.dataset.phase = 'flying';
+    },
   };
 }

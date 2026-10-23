@@ -7,6 +7,7 @@ import { apps } from '../data/apps';
   <section class="hero wrap">
     <h1>CrinkleCutSnV's <span class="squiggle">playground</span></h1>
     <p class="lede">Little web apps and games, made for fun. Have a play, break things, come back for more.</p>
+    <a class="scores-link" href="/scores/"><span aria-hidden="true">🏆</span> See my best scores</a>
   </section>
   <section class="wrap grid" aria-label="Apps">
     {apps.map((app) => <AppCardView app={app} />)}
@@ -21,6 +22,8 @@ import { apps } from '../data/apps';
   h1 { font-size: clamp(2.2rem, 6vw, 4rem); line-height: 1.05; margin: 0 0 .75rem; letter-spacing: -.02em; }
   .squiggle { background: linear-gradient(transparent 62%, var(--sun) 62% 92%, transparent 92%); padding: 0 .1em; }
   .lede { font-size: clamp(1.05rem, 2.2vw, 1.3rem); max-width: 40ch; margin: 0; opacity: .85; }
+  .scores-link { display: inline-flex; gap: .4rem; align-items: center; margin-top: 1rem; font-weight: 800; text-decoration: none; background: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: .35rem .9rem; box-shadow: 3px 3px 0 var(--ink); }
+  .scores-link:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.6rem; padding-bottom: 3rem; }
   .card-soon { border: 3px dashed rgba(43,45,66,.35); border-radius: var(--radius); display: grid; place-content: center; text-align: center; min-height: 280px; color: rgba(43,45,66,.6); font-weight: 700; }
   .card-soon span { font-size: 3rem; }

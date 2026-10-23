@@ -2,6 +2,7 @@
 import '../styles/global.css';
 interface Props { title: string; description?: string; wide?: boolean }
 const { title, description = "CrinkleCutSnV's playground: little web apps and games, made for fun.", wide = false } = Astro.props;
+const here = Astro.url.pathname;
 ---
 <!doctype html>
 <html lang="en-GB">
@@ -17,7 +18,10 @@ const { title, description = "CrinkleCutSnV's playground: little web apps and ga
     <header class="site-header">
       <div class="wrap">
         <a class="logo" href="/"><span>🥔</span> CrinkleCutSnV</a>
-        <nav><a href="/">All apps</a></nav>
+        <nav>
+          <a href="/" aria-current={here === '/' ? 'page' : undefined}>All apps</a>
+          <a href="/scores/" aria-current={here.startsWith('/scores') ? 'page' : undefined}><span aria-hidden="true">🏆</span> Best scores</a>
+        </nav>
       </div>
     </header>
     <main><slot /></main>
