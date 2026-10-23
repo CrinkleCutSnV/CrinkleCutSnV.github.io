@@ -8,6 +8,12 @@
     <div class="pill pill--strokes" data-strokes>Throws: 0</div>
     <div class="pill pill--best" data-kind>In hand: Driver</div>
     <div class="pill pill--best" data-best>Best: –</div>
+    <button type="button" class="pill pill--card" data-card-toggle aria-expanded="false" aria-controls="dg-card">Card</button>
+  </div>
+  <div class="banner is-hidden" data-banner aria-live="polite"></div>
+  <div class="card is-hidden" data-card id="dg-card" role="region" aria-label="Scorecard">
+    <div class="card-head"><strong>Scorecard</strong><button type="button" data-card-close aria-label="Close the scorecard">✕</button></div>
+    <div data-card-body></div>
   </div>
   <div class="hint" data-hint></div>
   <div class="toast is-hidden" data-toast aria-live="polite"></div>
@@ -18,9 +24,10 @@
       <p class="end-line" data-end-line></p>
       <p class="end-remark" data-end-remark></p>
       <p><span class="end-best" data-end-best></span></p>
+      <div class="end-table" data-end-card></div>
       <div class="end-buttons">
         <button type="button" data-again>Play again</button>
-        <button type="button" class="is-hidden secondary" data-next>Next hole</button>
+        <button type="button" class="is-hidden" data-next>Next hole →</button>
       </div>
     </div>
   </div>
@@ -78,6 +85,37 @@
     .end-card { padding: .8rem 1rem 1rem; }
     .end-remark { font-size: .85rem; }
     .end button { font-size: .95rem; padding: .4rem 1.1rem; }
+  }
+  .pill--card { pointer-events: auto; font: inherit; font-weight: 800; font-size: clamp(.75rem, 1.6vw, .9rem); background: #48cae4; color: var(--ink); cursor: pointer; }
+  .pill--card:hover { transform: translate(-1px, -1px); }
+  .banner { position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); width: max-content; max-width: min(420px, 82%); background: #fff; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 5px 5px 0 var(--ink); padding: .6rem 1rem; text-align: center; display: grid; gap: .2rem; pointer-events: none; animation: pop .3s ease-out; }
+  .banner :global(strong) { font-size: clamp(1.15rem, 3vw, 1.5rem); font-weight: 900; }
+  .banner :global(span) { font-size: .92rem; line-height: 1.3; }
+  .card { position: absolute; top: .75rem; left: 50%; transform: translateX(-50%); background: #fff; border: 3px solid var(--ink); border-radius: 16px; box-shadow: 5px 5px 0 var(--ink); padding: .5rem .8rem .6rem; width: min(380px, 92%); z-index: 2; }
+  .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .2rem; }
+  .card-head button { font: inherit; font-weight: 900; background: none; border: 2px solid var(--ink); border-radius: 999px; width: 1.8rem; height: 1.8rem; cursor: pointer; }
+  .dg :global(.card-table) { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: .9rem; }
+  .dg :global(.card-table th), .dg :global(.card-table td) { padding: .2rem .3rem; text-align: center; border-bottom: 1.5px solid rgba(43,45,66,.15); }
+  .dg :global(.card-table tbody th), .dg :global(.card-table tfoot th) { text-align: left; font-weight: 700; white-space: nowrap; }
+  .dg :global(.card-table thead th) { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; opacity: .65; }
+  .dg :global(.card-table tfoot) { font-weight: 900; }
+  .dg :global(.card-table tfoot th), .dg :global(.card-table tfoot td) { border-bottom: 0; border-top: 2.5px solid var(--ink); }
+  .dg :global(.card-table .n) { display: inline-grid; place-items: center; width: 1.35rem; height: 1.35rem; border-radius: 50%; background: var(--sun); border: 2px solid var(--ink); font-size: .75rem; font-weight: 900; margin-right: .2rem; }
+  .dg :global(.card-table .is-current) { background: #fff4d6; }
+  .dg :global(.card-table .vs) { font-weight: 800; }
+  .dg :global(.card-table .live) { opacity: .6; }
+  .dg :global(.card-best) { margin: .4rem 0 0; font-size: .82rem; font-weight: 700; opacity: .75; text-align: center; }
+  .end-table { margin: 0 0 .9rem; text-align: left; }
+  .end:not(.is-round) .end-table { font-size: .85em; }
+  @media (max-width: 640px) {
+    .dg :global(.card-table) { font-size: .74rem; }
+    .dg :global(.card-table th), .dg :global(.card-table td) { padding: .15rem .15rem; }
+    .dg :global(.card-table tbody th) { white-space: normal; }
+    .dg :global(.card-table thead th) { font-size: .62rem; letter-spacing: 0; }
+    .end-card { max-width: 94%; }
+    .end-table { margin-bottom: .6rem; }
+    .end-score { font-size: 2rem; }
+    .banner :global(span) { font-size: .82rem; }
   }
   .is-hidden { display: none !important; }
 </style>

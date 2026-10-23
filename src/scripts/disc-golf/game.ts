@@ -1,11 +1,14 @@
 import {
-  FIXED_DT, HOLES, PHYS, bearing, clamp, discFor, distTo, launch, restingDisc, step, surfaceAt,
+  FIXED_DT, HOLES, PHYS, bearing, simulate, clamp, discFor, distTo, dryLie, launch, restingDisc, slopeAt, step, surfaceAt,
   type Disc, type DiscKind, type Hole, type Throw, type Vec,
 } from './physics';
-import { drawBasket, drawCourse, drawDisc, drawMinimap, buildMinimap, drawAim, type Cam } from './scene';
+import { DRIVER as DRIVER_KIND } from './physics';
+import { drawBasket, drawCourse, drawDisc, drawMinimap, buildMinimap, drawAim, drawSplash, type Cam } from './scene';
 
 const BEST_KEY = 'crinklecut.discGolf.best.'; // + hole index
-const VIEW_M = 30; // metres visible across the shorter side of the screen
+const ROUND_KEY = 'crinklecut.discGolf.bestRound'; // total throws for a full round
+const VIEW_M = 30; // metres visible across the shorter side of the screen (putting)
+const VIEW_DRIVE = 50; // zoomed out a little when the driver is in hand
 
 // Selector timings (seconds for a full back-and-forth)
 const AIM_PERIOD = 1.6;
@@ -28,14 +31,44 @@ const vsPar = (strokes: number, par: number) => {
   const d = strokes - par;
   return d === 0 ? 'E' : d > 0 ? `+${d}` : `−${-d}`;
 };
-function remarkFor(strokes: number, par: number) {
+const REMARKS: Record<string, string[]> = {
+  // [ace, under par, par, one over, two or three over, worse]
+  'The Old Oak': [
+    'Straight in the chains off the tee. Frame that one.',
+    'Round the oak and in. Lovely stuff.',
+    'Solid. The oak sends its regards.',
+    'Not bad. Try bending one round the tree.',
+    'The oak won that round. Curve it right and go wide!',
+    'Scenic route! Everyone has a day like this.',
+  ],
+  'Troll Bridge': [
+    'An ace over the water?! The troll is speechless.',
+    'Round the bridge and in. The troll didn\'t get a look in.',
+    'Dry feet, par on the card. Nicely done.',
+    'One over. The troll takes a toll.',
+    'The stream had the last laugh. Curve round the bridge, or lay up short.',
+    'You fed the fish today. Next time, go round the bridge!',
+  ],
+  'King of the Hill': [
+    'Straight up the hill and in. Long live the king!',
+    'Birdie on the throne. Crown well earned.',
+    'Par up the hill. Fit for a king.',
+    'One over. The slope gave it a nudge.',
+    'Down the hill, back up the hill… Land it on the flat top!',
+    'The grand old Duke of York would be proud.',
+  ],
+};
+function remarkFor(name: string, strokes: number, par: number) {
+  const r = REMARKS[name] ?? REMARKS['The Old Oak'];
   const d = strokes - par;
-  if (strokes === 1) return 'Straight in the chains off the tee. Frame that one.';
-  if (d < 0) return 'Round the oak and in. Lovely stuff.';
-  if (d === 0) return 'Solid. The oak sends its regards.';
-  if (d === 1) return 'Not bad. Try bending one round the tree.';
-  if (d <= 3) return 'The oak won that round. Curve it right and go wide!';
-  return 'Scenic route! Everyone has a day like this.';
+  return r[strokes === 1 ? 0 : d < 0 ? 1 : d === 0 ? 2 : d === 1 ? 3 : d <= 3 ? 4 : 5];
+}
+function roundRemark(d: number) {
+  if (d <= -2) return 'A blistering round. Frame the scorecard!';
+  if (d < 0) return 'Under par for the round. Top stuff!';
+  if (d === 0) return 'Level par round the course. Tidy.';
+  if (d <= 2) return 'Close to par. One more go?';
+  return 'A round to remember (or forget). Have another crack!';
 }
 
 export function initDiscGolf(root: HTMLElement) {
@@ -48,6 +81,9 @@ export function initDiscGolf(root: HTMLElement) {
     end: $('[data-end]'), endTitle: $('[data-end-title]'), endScore: $('[data-end-score]'),
     endLine: $('[data-end-line]'), endRemark: $('[data-end-remark]'), endBest: $('[data-end-best]'),
     again: $<HTMLButtonElement>('[data-again]'), next: $<HTMLButtonElement>('[data-next]'),
+    endCard: $('[data-end-card]'), card: $('[data-card]'), cardBody: $('[data-card-body]'),
+    cardToggle: $<HTMLButtonElement>('[data-card-toggle]'), cardClose: $<HTMLButtonElement>('[data-card-close]'),
+    banner: $('[data-banner]'),
   };
 
   let holeIdx = 0;
@@ -69,17 +105,61 @@ export function initDiscGolf(root: HTMLElement) {
   let clangT = -1;
   let bounceT = -1; // time since the disc bounced off the basket (for the hop)
   let time = 0;
+  let view = VIEW_M; // eased zoom
   let lastThrow: Throw | null = null;
   let lastEvent: Disc['event'] = null;
+  let throwEvents: string[] = []; // this throw's events, in order (testing)
   let flash = -1;
+  let splashT = -1; // time since a splash
+  let splashAt: Vec = { x: 0, y: 0 };
+  let penalties = 0; // this hole
+  let rollToast = false; // said "rolling back down" this throw?
+  /** throws per hole this round (null = not played yet) */
+  let scores: (number | null)[] = HOLES.map(() => null);
+  let lastRoundBest: { prev: number; isBest: boolean } | null = null;
 
   const bestOf = (i: number) => Number(localStorage.getItem(BEST_KEY + i) || 0) || 0;
+  const roundBest = () => Number(localStorage.getItem(ROUND_KEY) || 0) || 0;
+  const played = () => scores.map((sc, i) => ({ sc, par: HOLES[i].par })).filter((x) => x.sc !== null) as { sc: number; par: number }[];
+  const roundTotals = () => {
+    const p = played();
+    return { strokes: p.reduce((a, x) => a + x.sc, 0), par: p.reduce((a, x) => a + x.par, 0), holes: p.length };
+  };
+  const coursePar = HOLES.reduce((a, x) => a + x.par, 0);
+  function cardHtml() {
+    let run = 0, runPar = 0;
+    const rows = HOLES.map((ho, i) => {
+      const sc = scores[i];
+      if (sc !== null) { run += sc; runPar += ho.par; }
+      const cur = i === holeIdx && sc === null;
+      return `<tr class="${cur ? 'is-current' : ''}"><th scope="row"><span class="n">${i + 1}</span> ${ho.name}</th><td>${ho.par}</td>`
+        + `<td>${sc ?? (cur && strokes ? `<span class="live">${strokes}…</span>` : '–')}</td>`
+        + `<td class="vs">${sc !== null ? vsPar(sc, ho.par) : '–'}</td><td class="vs">${sc !== null ? vsPar(run, runPar) : '–'}</td></tr>`;
+    }).join('');
+    const t = roundTotals();
+    const b = roundBest();
+    return `<table class="card-table"><thead><tr><th scope="col">Hole</th><th scope="col">Par</th><th scope="col">Throws</th><th scope="col">±</th><th scope="col">Total</th></tr></thead>`
+      + `<tbody>${rows}</tbody><tfoot><tr><th scope="row">Round</th><td>${coursePar}</td><td>${t.holes ? t.strokes : '–'}</td><td></td><td class="vs">${t.holes ? vsPar(t.strokes, t.par) : '–'}</td></tr></tfoot></table>`
+      + `<p class="card-best">Best round: ${b ? `${b} (${vsPar(b, coursePar)})` : '–'}</p>`;
+  }
+  const refreshCard = () => {
+    const t = roundTotals();
+    hud.cardToggle.textContent = t.holes ? `Card · ${vsPar(t.strokes, t.par)}` : 'Card';
+    if (!hud.card.classList.contains('is-hidden')) hud.cardBody.innerHTML = cardHtml();
+  };
   const showHud = () => {
-    hud.hole.textContent = `Hole ${holeIdx + 1} · Par ${hole.par}`;
+    hud.hole.textContent = `Hole ${holeIdx + 1}/${HOLES.length} · Par ${hole.par}`;
     hud.strokes.textContent = `Throws: ${strokes}`;
     const b = bestOf(holeIdx);
     hud.best.textContent = b ? `Best: ${b} (${vsPar(b, hole.par)})` : 'Best: –';
+    refreshCard();
   };
+  hud.cardToggle.addEventListener('click', () => {
+    const open = hud.card.classList.toggle('is-hidden') === false;
+    hud.cardToggle.setAttribute('aria-expanded', String(open));
+    if (open) hud.cardBody.innerHTML = cardHtml();
+  });
+  hud.cardClose.addEventListener('click', () => { hud.card.classList.add('is-hidden'); hud.cardToggle.setAttribute('aria-expanded', 'false'); });
 
   // ---- sizing ------------------------------------------------------------------------
   function resize() {
@@ -87,7 +167,7 @@ export function initDiscGolf(root: HTMLElement) {
     dpr = Math.min(window.devicePixelRatio || 1, 3);
     w = Math.max(1, r.width); h = Math.max(1, r.height);
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
-    ppm = Math.min(w, h) / VIEW_M;
+    ppm = Math.min(w, h) / view;
     // minimap in the top-right corner, sized to the screen
     const b = hole.bounds;
     const mw = clamp(Math.min(w * 0.24, h * 0.3), 92, 190);
@@ -126,6 +206,8 @@ export function initDiscGolf(root: HTMLElement) {
     aim = th.aim; power = th.power; curve = th.curve;
     disc = launch(disc, th);
     lastEvent = null;
+    throwEvents = [];
+    rollToast = false;
     strokes++;
     path = [{ x: disc.x, y: disc.y }];
     throwsPath.push(path);
@@ -164,6 +246,13 @@ export function initDiscGolf(root: HTMLElement) {
     else if (ev.kind === 'edge') toast('Into the hedge!');
     else if (ev.kind === 'pole') toast('Tink! Bumped the pole.');
     else if (ev.kind === 'land' && surfaceAt(hole, disc) === 'rough') toast('In the rough');
+    else if (ev.kind === 'rail') toast(ev.speed > 12 ? 'BONK! Off the bridge rail.' : 'Clipped the bridge!');
+    else if (ev.kind === 'splash') {
+      splashT = 0; splashAt = { x: disc.x, y: disc.y };
+      strokes++; penalties++;
+      toast('Splash! +1 penalty', true);
+      showHud();
+    }
     else if (ev.kind === 'chains') { chainsT = 0; toast(strokes === 1 ? 'ACE!!' : 'CHAINS!', true); }
   }
 
@@ -184,42 +273,83 @@ export function initDiscGolf(root: HTMLElement) {
     press();
   });
 
+  let bannerTimer = 0;
+  function banner() {
+    hud.banner.innerHTML = `<strong>Hole ${holeIdx + 1} · ${hole.name}</strong><span>Par ${hole.par} · ${Math.round(distTo(hole.tee, hole.basket))} m. ${hole.tip}</span>`;
+    hud.banner.classList.remove('is-hidden');
+    hud.banner.style.animation = 'none'; void hud.banner.offsetWidth; hud.banner.style.animation = '';
+    clearTimeout(bannerTimer);
+    bannerTimer = window.setTimeout(() => hud.banner.classList.add('is-hidden'), 3200);
+  }
   function resetHole(idx = holeIdx) {
     holeIdx = idx; hole = HOLES[idx];
     disc = restingDisc(hole.tee);
-    strokes = 0; throwsPath = []; path = [];
-    chainsT = -1; clangT = -1; bounceT = -1;
+    strokes = 0; penalties = 0; throwsPath = []; path = [];
+    chainsT = -1; clangT = -1; bounceT = -1; splashT = -1;
+    scores[idx] = null;
     cam = { x: hole.tee.x, y: hole.tee.y };
+    view = discFor(hole, hole.tee) === DRIVER_KIND ? VIEW_DRIVE : VIEW_M;
     hud.end.classList.add('is-hidden');
     resize();
     showHud();
     startStroke();
     snapCamera();
+    banner();
   }
-  hud.again.addEventListener('click', () => resetHole());
-  hud.next.addEventListener('click', () => resetHole((holeIdx + 1) % HOLES.length));
+  function resetRound() {
+    scores = HOLES.map(() => null);
+    lastRoundBest = null;
+    resetHole(0);
+  }
+  const isLast = () => holeIdx === HOLES.length - 1;
+  hud.again.addEventListener('click', () => resetRound());
+  hud.next.addEventListener('click', () => resetHole(Math.min(holeIdx + 1, HOLES.length - 1)));
 
   function finish() {
     stage = 'done';
     root.dataset.stage = stage;
+    scores[holeIdx] = strokes;
     const prev = bestOf(holeIdx);
     const isBest = !prev || strokes < prev;
     if (isBest) localStorage.setItem(BEST_KEY + holeIdx, String(strokes));
-    hud.endTitle.textContent = `Hole ${holeIdx + 1} · ${hole.name}`;
-    hud.endScore.textContent = scoreName(strokes, hole.par);
-    hud.endLine.textContent = `${strokes} ${strokes === 1 ? 'throw' : 'throws'} on a par ${hole.par} · ${vsPar(strokes, hole.par)}`;
-    hud.endRemark.textContent = remarkFor(strokes, hole.par);
-    hud.endBest.textContent = isBest ? (prev ? 'New best!' : 'First score on the board!') : `Best: ${prev} (${vsPar(prev, hole.par)})`;
-    hud.endBest.classList.toggle('is-new', isBest);
-    hud.next.classList.toggle('is-hidden', HOLES.length < 2);
+    const holeLine = `${strokes} ${strokes === 1 ? 'throw' : 'throws'} on a par ${hole.par} · ${vsPar(strokes, hole.par)}${penalties ? ` (incl. ${penalties} penalty)` : ''}`;
+    const last = isLast();
+    if (last) {
+      const t = roundTotals();
+      const rb = roundBest();
+      const full = scores.every((x) => x !== null);
+      const rIsBest = full && (!rb || t.strokes < rb);
+      if (rIsBest) localStorage.setItem(ROUND_KEY, String(t.strokes));
+      lastRoundBest = { prev: rb, isBest: rIsBest };
+      hud.endTitle.textContent = `Round complete · hole ${holeIdx + 1}: ${scoreName(strokes, hole.par)}`;
+      const d = t.strokes - t.par;
+      hud.endScore.textContent = d === 0 ? 'Level par' : vsPar(t.strokes, t.par);
+      hud.endLine.textContent = `${t.strokes} throws round a par ${t.par}`;
+      hud.endRemark.textContent = roundRemark(d);
+      hud.endBest.textContent = rIsBest ? (rb ? 'New best round!' : 'First round on the board!') : rb ? `Best round: ${rb} (${vsPar(rb, coursePar)})` : 'Play all three holes for a round score';
+      hud.endBest.classList.toggle('is-new', rIsBest);
+    } else {
+      hud.endTitle.textContent = `Hole ${holeIdx + 1} · ${hole.name}`;
+      hud.endScore.textContent = scoreName(strokes, hole.par);
+      hud.endLine.textContent = holeLine;
+      hud.endRemark.textContent = remarkFor(hole.name, strokes, hole.par);
+      hud.endBest.textContent = isBest ? (prev ? 'New best!' : 'First score on the board!') : `Best: ${prev} (${vsPar(prev, hole.par)})`;
+      hud.endBest.classList.toggle('is-new', isBest);
+    }
+    hud.endCard.innerHTML = cardHtml();
+    hud.end.classList.toggle('is-round', last);
+    hud.next.classList.toggle('is-hidden', last);
+    hud.again.textContent = last ? 'Play again' : 'Restart round';
+    hud.again.classList.toggle('secondary', !last);
+    hud.card.classList.add('is-hidden');
     hud.end.classList.remove('is-hidden');
     showHud();
-    hud.again.focus({ preventScroll: true });
+    (last ? hud.again : hud.next).focus({ preventScroll: true });
   }
 
   // ---- camera ------------------------------------------------------------------------
   function camTarget(): Vec {
-    const look = Math.min(w, h) / ppm * 0.22;
+    const look = Math.min(w, h) / ppm * (kind === DRIVER_KIND ? 0.24 : 0.22);
     if (stage === 'flying') {
       const v = Math.hypot(disc.vx, disc.vy);
       const k = Math.min(look, v * 0.35) / Math.max(v, 1e-3);
@@ -243,6 +373,7 @@ export function initDiscGolf(root: HTMLElement) {
     if (chainsT >= 0) chainsT += dt;
     if (clangT >= 0) clangT += dt;
     if (bounceT >= 0) bounceT += dt;
+    if (splashT >= 0) splashT += dt;
 
     if (stage === 'aim') aim = lineToBasket() + AIM_SWING * (2 * tri(stageT / AIM_PERIOD + 0.25) - 1);
     else if (stage === 'power') power = tri(stageT / POWER_PERIOD);
@@ -252,19 +383,38 @@ export function initDiscGolf(root: HTMLElement) {
       acc += dt;
       while (acc >= FIXED_DT) {
         step(hole, disc);
-        if (disc.event && disc.event !== lastEvent) { lastEvent = disc.event; onEvent(disc.event); }
+        if (disc.event && disc.event !== lastEvent) { lastEvent = disc.event; throwEvents.push(disc.event.kind); onEvent(disc.event); }
         acc -= FIXED_DT;
         if (disc.phase === 'rest' || disc.phase === 'holed') break;
+      }
+      if (!rollToast && disc.phase === 'ground') {
+        const g = slopeAt(hole, disc);
+        if (Math.hypot(g.x, g.y) > 0 && g.x * disc.vx + g.y * disc.vy > 0 && distTo(disc, hole.basket) > (hole.hills?.[0]?.top ?? 0) + 1.5) {
+          rollToast = true; toast('Rolling back down the hill!');
+        }
       }
       const lp = path[path.length - 1];
       if (distTo(lp, disc) > 0.6) path.push({ x: disc.x, y: disc.y });
       if (disc.phase === 'holed') { path.push({ x: disc.x, y: disc.y }); stage = 'holed'; stageT = 0; root.dataset.stage = stage; }
       else if (disc.phase === 'rest') { path.push({ x: disc.x, y: disc.y }); stage = 'settle'; stageT = 0; root.dataset.stage = stage; }
     } else acc = 0;
-    if (stage === 'settle' && stageT > 0.75) startStroke();
+    const wet = lastEvent?.kind === 'splash';
+    if (stage === 'settle' && stageT > (wet ? 1.4 : 0.75)) {
+      if (wet) {
+        // play on from the bank on the side it was thrown from
+        const lie = dryLie(hole, disc, { x: disc.ox, y: disc.oy });
+        disc = restingDisc(lie);
+        lastEvent = null;
+        path = [];
+      }
+      startStroke();
+    }
     if (stage === 'holed' && stageT > 1.9) finish();
 
-    // ease the camera
+    // ease the zoom (wider with the driver in hand), then the camera
+    const vt = stage === 'holed' || stage === 'done' ? VIEW_M : kind === DRIVER_KIND ? VIEW_DRIVE : VIEW_M;
+    view += (vt - view) * (1 - Math.exp(-dt * 2.5));
+    ppm = Math.min(w, h) / view;
     const tgt = camTarget();
     const k = 1 - Math.exp(-dt * (stage === 'flying' ? 6 : 3.2));
     cam.x += (tgt.x - cam.x) * k;
@@ -277,7 +427,7 @@ export function initDiscGolf(root: HTMLElement) {
   function draw() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const c: Cam = { x: cam.x, y: cam.y, ppm, w, h };
-    drawCourse(ctx, hole, c, time);
+    drawCourse(ctx, hole, c, time, holeIdx + 1);
     // this throw's trail
     if (path.length > 1 && stage !== 'aim' && stage !== 'power' && stage !== 'curve') {
       ctx.save();
@@ -299,7 +449,9 @@ export function initDiscGolf(root: HTMLElement) {
     drawBasket(ctx, hole.basket, c, chainsT, clangT, time);
     // a little hop as it comes off the basket
     const hop = bounceT >= 0 && bounceT < 1 ? 1.1 * Math.abs(Math.sin(bounceT * Math.PI * 2.4)) * Math.exp(-bounceT * 3.2) : 0;
-    drawDisc(ctx, hop ? { ...disc, z: disc.z + hop } : disc, c, stage === 'holed' || stage === 'done');
+    const sunk = lastEvent?.kind === 'splash' && stage === 'settle';
+    if (splashT >= 0) drawSplash(ctx, splashAt, c, splashT);
+    if (!sunk) drawDisc(ctx, hop ? { ...disc, z: disc.z + hop } : disc, c, stage === 'holed' || stage === 'done');
 
     // ---- overlays ----
     drawMinimap(ctx, minimap, mm, hole, disc, throwsPath, { x: cam.x - w / 2 / ppm, y: cam.y - h / 2 / ppm, w: w / ppm, h: h / ppm });
@@ -436,7 +588,7 @@ export function initDiscGolf(root: HTMLElement) {
     ctx.restore();
   }
 
-  resetHole(0);
+  resetRound();
   requestAnimationFrame(frame);
 
   // test/debug hook (used by scripts/disc-tests.mjs)
@@ -449,7 +601,21 @@ export function initDiscGolf(root: HTMLElement) {
     get aim() { return aim; },
     get lastThrow() { return lastThrow; },
     get lastEvent() { return lastEvent ? lastEvent.kind : null; },
+    get throwEvents() { return [...throwEvents]; },
     hole: () => hole,
+    get holeIdx() { return holeIdx; },
+    get scores() { return [...scores]; },
+    get penalties() { return penalties; },
+    get splashAt() { return splashAt; },
+    roundTotals,
+    coursePar,
+    /** where a throw from the current lie would end up (testing) */
+    predict(aimDeg: number, pw: number, cv: number) {
+      const r = simulate(hole, disc, { aim: lineToBasket() + (aimDeg * Math.PI) / 180, power: pw, curve: cv, kind });
+      return { holed: r.holed, penalty: r.penalty, left: distTo(r.lie, hole.basket) };
+    },
+    /** jump straight to a hole (testing) */
+    goToHole(i: number) { resetHole(i); },
     lineToBasket,
     /** throw with aim given in degrees relative to the line to the basket (+ = right) */
     throwWith(aimDeg: number, pw: number, cv: number) {

@@ -23,7 +23,7 @@ export const apps: AppCard[] = [
   {
     slug: 'disc-golf',
     title: 'Arcade Disc Golf',
-    blurb: 'Time your taps for direction, power and curve, then bend the disc round the old oak and into the chains.',
+    blurb: 'Time your taps for direction, power and curve, and play a three-hole round: round the old oak, past the troll bridge and up the hill.',
     emoji: '🥏',
     icon: '/icons/disc-golf.svg',
     colour: '#7bd389',

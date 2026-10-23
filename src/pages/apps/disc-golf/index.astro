@@ -2,7 +2,7 @@
 import Base from '../../../layouts/Base.astro';
 import DiscGolfGame from '../../../components/DiscGolfGame.astro';
 ---
-<Base title="Arcade Disc Golf · CrinkleCutSnV's playground" description="A top-down arcade disc golf game. Time your taps to set direction, power and curve, and bend it round the old oak into the chains.">
+<Base title="Arcade Disc Golf · CrinkleCutSnV's playground" description="A top-down arcade disc golf game. Time your taps to set direction, power and curve, and play a three-hole round: round the old oak, past the troll bridge and up the hill.">
   <section class="wrap game-page">
     <div class="title-row">
       <h1>Arcade Disc Golf 🥏</h1>
@@ -17,7 +17,13 @@ import DiscGolfGame from '../../../components/DiscGolfGame.astro';
         <li><strong>Curve:</strong> the needle swings from hard left to hard right. Tap to set how much the disc bends. Like a real disc, it bends more as it slows down.</li>
       </ol>
       <p>Get the disc into the chain basket in as few throws as you can. The arrow in the bottom corner always points to the basket and shows how far away it is, and the map in the top corner shows the whole hole. Trees knock the disc down, and the long grass stops it skidding. You get a driver from distance and a putter once you're close. A gentle putt anywhere on the basket drops in, but the harder you throw, the more central you need to be. Too hot and slightly off and it'll clang off the chains or skip past the edge.</p>
-      <p><strong>Hole 1, "The Old Oak" (par 2):</strong> the fairway bends right around a big oak. Go straight and you'll hit the tree, so throw out to the left and curve it right round the bend.</p>
+      <p><strong>Water:</strong> flying over the stream is fine, but if your disc lands in it, skids into it or drops into it off something, that's a one-throw penalty ("Splash! +1"). You then play on from the bank on the side you threw from.</p>
+      <p><strong>The round:</strong> three holes, par 8. After each hole, press <strong>Next hole</strong>. The <strong>Card</strong> button under your score shows each hole's par, your throws and your running total against par, and the full scorecard appears at the end of the round. Your best score for each hole and your best round are saved on this device. <strong>Play again</strong> starts a fresh round from hole 1.</p>
+      <ul class="holes">
+        <li><strong>Hole 1, "The Old Oak" (par 2):</strong> the fairway bends right around a big oak. Go straight and you'll hit the tree, so throw out to the left and curve it right round the bend.</li>
+        <li><strong>Hole 2, "Troll Bridge" (par 3):</strong> a stream cuts across the fairway, and the footbridge sits right on the straight line. Throw straight at the basket and you'll hit the rails and drop in the water. Aim out to one side and curve it back round the bridge, or lay up short of the stream and go over it with your next throw.</li>
+        <li><strong>Hole 3, "King of the Hill" (par 3):</strong> an S-bend up to a basket on top of a round hill. A disc that lands on the flat top stays put, but come up short on the slope and it'll roll back down. Get close with your drive, then land your next throw on the top.</li>
+      </ul>
     </details>
   </section>
 </Base>
@@ -30,5 +36,6 @@ import DiscGolfGame from '../../../components/DiscGolfGame.astro';
   .how summary { font-weight: 800; cursor: pointer; }
   .how ol { padding-left: 1.3rem; }
   .how li { margin: .3rem 0; }
+  .how .holes { padding-left: 1.1rem; }
   kbd { font: inherit; font-size: .85em; font-weight: 800; border: 2px solid var(--ink); border-radius: 6px; padding: 0 .3rem; background: #fff; }
 </style>

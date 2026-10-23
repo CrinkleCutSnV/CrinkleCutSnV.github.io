@@ -1,5 +1,5 @@
 // Cartoon top-down drawing for Arcade Disc Golf.
-import type { Disc, Hole, Vec } from './physics';
+import { bridgeRails, type Bridge, type Disc, type Hill, type Hole, type Stream, type Vec } from './physics';
 
 export interface Cam { x: number; y: number; ppm: number; w: number; h: number }
 
@@ -10,6 +10,12 @@ const FAIRWAY = '#a9e27c';
 const FAIRWAY_STRIPE = '#b8ea8c';
 const HEDGE = '#3e8a47';
 const DISC = '#ff7a59';
+const WATER = '#4fb3e8';
+const WATER_LIGHT = '#86d3f7';
+const BANK = '#c9a66b';
+const PLANK = '#c98d55';
+const PLANK_DARK = '#b47a44';
+const RAIL = '#7a4a2a';
 
 const sx = (c: Cam, x: number) => (x - c.x) * c.ppm + c.w / 2;
 const sy = (c: Cam, y: number) => (y - c.y) * c.ppm + c.h / 2;
@@ -52,7 +58,7 @@ function drawTree(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
   ctx.beginPath(); ctx.arc(x - r * 0.33 + sway, y - r * 0.36, r * 0.16, 0, Math.PI * 2); ctx.fill();
 }
 
-export function drawCourse(ctx: CanvasRenderingContext2D, hole: Hole, c: Cam, time: number) {
+export function drawCourse(ctx: CanvasRenderingContext2D, hole: Hole, c: Cam, time: number, num = 1) {
   const { w, h, ppm } = c;
   ctx.fillStyle = ROUGH;
   ctx.fillRect(0, 0, w, h);
@@ -89,6 +95,10 @@ export function drawCourse(ctx: CanvasRenderingContext2D, hole: Hole, c: Cam, ti
   ctx.strokeStyle = FAIRWAY_STRIPE; ctx.lineWidth = fw - 2; ctx.stroke();
   ctx.restore();
 
+  for (const hl of hole.hills ?? []) drawHill(ctx, hl, c);
+  for (const st of hole.water ?? []) drawStream(ctx, st, c, time, tx);
+  for (const br of hole.bridges ?? []) drawBridge(ctx, br, c);
+
   // tee pad
   const t = hole.tee;
   ctx.save();
@@ -106,7 +116,7 @@ export function drawCourse(ctx: CanvasRenderingContext2D, hole: Hole, c: Cam, ti
   ctx.beginPath(); ctx.roundRect(-0.9 * ppm, -1.3 * ppm, 1.8 * ppm, 1.2 * ppm, ppm * 0.2); ctx.fill(); ctx.stroke();
   ctx.fillStyle = INK; ctx.font = `900 ${Math.round(ppm * 0.62)}px ui-rounded, Nunito, system-ui, sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(`1 · P${hole.par}`, 0, -0.68 * ppm);
+  ctx.fillText(`${num} · P${hole.par}`, 0, -0.68 * ppm);
   ctx.restore();
 
   // hedge beyond the course boundary
@@ -134,6 +144,133 @@ export function drawCourse(ctx: CanvasRenderingContext2D, hole: Hole, c: Cam, ti
     if (X < -R * 2 || X > w + R * 2 || Y < -R * 2 || Y > h + R * 2) return;
     drawTree(ctx, X, Y, R, i + 1, Math.sin(time * 0.9 + i) * ppm * 0.06);
   });
+}
+
+/** A round hill: a shadow on the low side, a lighter flat top, contour rings and downhill chevrons. */
+function drawHill(ctx: CanvasRenderingContext2D, hl: Hill, c: Cam) {
+  const { ppm } = c;
+  const X = sx(c, hl.x), Y = sy(c, hl.y), R = hl.base * ppm, T = hl.top * ppm;
+  ctx.save();
+  ctx.fillStyle = 'rgba(30,70,30,.22)';
+  ctx.beginPath(); ctx.ellipse(X + R * 0.08, Y + R * 0.1, R, R, 0, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createRadialGradient(X - T * 0.4, Y - T * 0.5, T * 0.3, X, Y, R);
+  g.addColorStop(0, '#d9f7b0'); g.addColorStop(T / R, '#c4ef98'); g.addColorStop(1, '#93d266');
+  ctx.fillStyle = g; ctx.strokeStyle = 'rgba(43,45,66,.35)'; ctx.lineWidth = Math.max(2, ppm * 0.1);
+  ctx.beginPath(); ctx.arc(X, Y, R, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  // contour rings
+  ctx.setLineDash([ppm * 0.6, ppm * 0.5]);
+  ctx.strokeStyle = 'rgba(43,45,66,.2)'; ctx.lineWidth = Math.max(1.2, ppm * 0.06);
+  for (const f of [0.33, 0.66]) { ctx.beginPath(); ctx.arc(X, Y, T + (R - T) * f, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.setLineDash([]);
+  // the flat top
+  ctx.strokeStyle = 'rgba(43,45,66,.4)'; ctx.lineWidth = Math.max(1.5, ppm * 0.08);
+  ctx.fillStyle = 'rgba(255,255,255,.18)';
+  ctx.beginPath(); ctx.arc(X, Y, T, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  // downhill chevrons
+  ctx.strokeStyle = 'rgba(43,45,66,.28)'; ctx.lineWidth = Math.max(1.5, ppm * 0.09); ctx.lineCap = 'round';
+  const rr = (T + R) / 2, s = ppm * 0.45;
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + 0.3;
+    const ux = Math.cos(a), uy = Math.sin(a);
+    const px = X + ux * rr, py = Y + uy * rr;
+    ctx.beginPath();
+    ctx.moveTo(px - ux * s - uy * s, py - uy * s + ux * s);
+    ctx.lineTo(px, py);
+    ctx.lineTo(px - ux * s + uy * s, py - uy * s - ux * s);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** A stream: muddy banks, blue water, a lighter channel and drifting ripples. */
+function drawStream(ctx: CanvasRenderingContext2D, st: Stream, c: Cam, time: number, tx: (p: Vec) => [number, number]) {
+  const { ppm } = c;
+  const W = st.halfWidth * 2 * ppm;
+  ctx.save();
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  fairwayPath(ctx, st.path, tx);
+  ctx.strokeStyle = 'rgba(43,45,66,.55)'; ctx.lineWidth = W + ppm * 1.3; ctx.stroke();
+  ctx.strokeStyle = BANK; ctx.lineWidth = W + ppm * 1.1; ctx.stroke();
+  ctx.strokeStyle = WATER; ctx.lineWidth = W; ctx.stroke();
+  ctx.strokeStyle = WATER_LIGHT; ctx.lineWidth = W * 0.42; ctx.stroke();
+  // ripples drifting downstream
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = Math.max(1.5, ppm * 0.09);
+  for (const [off, ph] of [[-0.45, 0], [0.4, 1.7], [0, 3.1]] as const) {
+    ctx.save();
+    ctx.setLineDash([ppm * 0.9, ppm * 3.2]);
+    ctx.lineDashOffset = -(time * ppm * 1.6 + ph * ppm);
+    ctx.beginPath();
+    st.path.forEach((p, i) => {
+      const q = st.path[Math.min(i + 1, st.path.length - 1)], o = st.path[Math.max(i - 1, 0)];
+      const dx = q.x - o.x, dy = q.y - o.y, L = Math.hypot(dx, dy) || 1;
+      const [x, y] = tx({ x: p.x - (dy / L) * off * st.halfWidth, y: p.y + (dx / L) * off * st.halfWidth });
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/** A wooden footbridge: planks across the deck, chunky side rails with posts. */
+function drawBridge(ctx: CanvasRenderingContext2D, br: Bridge, c: Cam) {
+  const { ppm } = c;
+  const L = br.length * ppm, W = br.width * ppm;
+  ctx.save();
+  ctx.translate(sx(c, br.x), sy(c, br.y));
+  ctx.rotate(br.angle);
+  ctx.fillStyle = 'rgba(20,50,80,.35)';
+  ctx.fillRect(-L / 2 + ppm * 0.35, -W / 2 + ppm * 0.45, L, W);
+  const n = Math.round(br.length / 0.55);
+  const pw = L / n;
+  ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1, ppm * 0.05);
+  for (let i = 0; i < n; i++) {
+    ctx.fillStyle = i % 2 ? PLANK : PLANK_DARK;
+    const j = (hash(i, 7) - 0.5) * ppm * 0.12;
+    ctx.fillRect(-L / 2 + i * pw, -W / 2 + j, pw, W);
+    ctx.strokeRect(-L / 2 + i * pw, -W / 2 + j, pw, W);
+  }
+  // rails
+  const rw = Math.max(4, ppm * 0.42);
+  for (const k of [-1, 1]) {
+    const y = k * (W / 2);
+    ctx.fillStyle = RAIL; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.5, ppm * 0.08);
+    ctx.beginPath(); ctx.roundRect(-L / 2 - rw * 0.3, y - rw / 2, L + rw * 0.6, rw, rw / 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#9a6238';
+    ctx.fillRect(-L / 2, y - rw * 0.32, L, rw * 0.22);
+    for (let i = 0; i <= 4; i++) {
+      const x = -L / 2 + (L * i) / 4;
+      ctx.fillStyle = '#5c3720';
+      ctx.beginPath(); ctx.roundRect(x - rw * 0.55, y - rw * 0.55, rw * 1.1, rw * 1.1, rw * 0.2); ctx.fill(); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/** Ripples where the disc went in the water. */
+export function drawSplash(ctx: CanvasRenderingContext2D, p: Vec, c: Cam, t: number) {
+  if (t < 0 || t > 1.6) return;
+  const X = sx(c, p.x), Y = sy(c, p.y);
+  ctx.save();
+  for (let k = 0; k < 3; k++) {
+    const u = t - k * 0.18;
+    if (u <= 0) continue;
+    const r = c.ppm * (0.4 + u * 2.4);
+    ctx.strokeStyle = `rgba(255,255,255,${Math.max(0, 0.95 - u * 0.7)})`;
+    ctx.lineWidth = Math.max(1.5, c.ppm * 0.14 * (1 - u * 0.4));
+    ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.8, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  // droplets thrown up
+  if (t < 0.7) {
+    ctx.fillStyle = '#e8f7ff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + 0.4;
+      const d = c.ppm * (0.5 + t * 2.6), up = c.ppm * 1.8 * t * (0.7 - t) * 4;
+      ctx.beginPath(); ctx.arc(X + Math.cos(a) * d, Y + Math.sin(a) * d * 0.8 - up, c.ppm * 0.16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 /** The chain basket from above: tray, chains, yellow top band, pole cap. */
@@ -273,6 +410,27 @@ export function buildMinimap(hole: Hole, mw: number, mh: number, s: number, dpr:
   g.lineJoin = 'round'; g.lineCap = 'round';
   fairwayPath(g, hole.fairway, tx);
   g.strokeStyle = FAIRWAY; g.lineWidth = hole.fairwayHalfWidth * 2 * s; g.stroke();
+  for (const hl of hole.hills ?? []) {
+    const [x, y] = tx(hl);
+    g.fillStyle = '#c4ef98'; g.strokeStyle = 'rgba(43,45,66,.4)'; g.lineWidth = 1;
+    g.beginPath(); g.arc(x, y, hl.base * s, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillStyle = '#e2f9c4'; g.beginPath(); g.arc(x, y, hl.top * s, 0, Math.PI * 2); g.fill(); g.stroke();
+  }
+  for (const st of hole.water ?? []) {
+    fairwayPath(g, st.path, tx);
+    g.strokeStyle = BANK; g.lineWidth = (st.halfWidth * 2 + 1) * s; g.stroke();
+    g.strokeStyle = WATER; g.lineWidth = st.halfWidth * 2 * s; g.stroke();
+  }
+  for (const br of hole.bridges ?? []) {
+    g.strokeStyle = RAIL; g.lineWidth = Math.max(1.5, 0.5 * s * 2);
+    const rails = bridgeRails(br);
+    g.fillStyle = PLANK;
+    g.beginPath();
+    const [a0, a1] = rails[0], [b0, b1] = rails[1];
+    for (const [i, p] of [a0, a1, b1, b0].entries()) { const [x, y] = tx(p); i ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.closePath(); g.fill();
+    for (const [a, b] of rails) { g.beginPath(); g.moveTo(...tx(a)); g.lineTo(...tx(b)); g.stroke(); }
+  }
   for (const tr of hole.trees) {
     const [x, y] = tx(tr);
     g.fillStyle = '#3f9d52'; g.strokeStyle = 'rgba(43,45,66,.7)'; g.lineWidth = 1;

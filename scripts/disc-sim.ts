@@ -1,6 +1,6 @@
 // Headless checks for Arcade Disc Golf. Run with `npm run check:disc`.
 import {
-  DRIVER, HOLES, PUTTER, bearing, discFor, distTo, simulate, surfaceAt, type Throw,
+  DRIVER, HOLES, PUTTER, bearing, launch, step, discFor, distTo, simulate, surfaceAt, type Hole, type Throw, type Vec,
 } from '../src/scripts/disc-golf/physics';
 
 const hole = HOLES[0];
@@ -130,5 +130,138 @@ check(r6(1) <= 0.6 && r6(1) >= 0.15, `full-power putt from 6 m only goes in when
   check(surfaceAt(hole, fair.disc) === 'fairway' && -rough.disc.y < -fair.disc.y - 1.5,
     `rough grabs the disc on landing (same throw: ${(-fair.disc.y).toFixed(1)} m on the fairway vs ${(-rough.disc.y).toFixed(1)} m in the rough)`);
 }
+// ---- every hole: a par route, birdie chances, and each hole's special feature ----------
+const robustTee: Record<string, Cand> = {};
+type Cand = { th: Throw; r: ReturnType<typeof simulate>; score: number };
+function search(h: Hole, lie: Vec, step = 3): Cand[] {
+  const kind = discFor(h, lie);
+  const base = bearing(lie, h.basket);
+  const out: Cand[] = [];
+  for (let a = -60; a <= 60; a += step) {
+    for (let p = 0.1; p <= 1.0001; p += 0.05) {
+      for (let c = -1; c <= 1.0001; c += 0.25) {
+        const th = { aim: base + rad(a), power: p, curve: c, kind };
+        const r = simulate(h, lie, th);
+        out.push({ th, r, score: r.holed ? -1 : distTo(r.lie, h.basket) + (r.penalty ? 40 : 0) });
+      }
+    }
+  }
+  return out.sort((x, y) => x.score - y.score);
+}
+const fmtTh = (h: Hole, lie: Vec, t: Throw) => {
+  const off = deg(t.aim - bearing(lie, h.basket));
+  return `${t.kind.name.toLowerCase()} ${Math.abs(off).toFixed(0)}° ${off < 0 ? 'left' : 'right'}, ${(t.power * 100).toFixed(0)}%, curve ${t.curve === 0 ? 'none' : `${t.curve > 0 ? 'right' : 'left'} ${Math.abs(t.curve * 100).toFixed(0)}%`}`;
+};
+function pathLength(h: Hole) { let L = 0; for (let i = 1; i < h.fairway.length; i++) L += distTo(h.fairway[i - 1], h.fairway[i]); return L; }
+
+HOLES.forEach((h, i) => {
+  console.log(`\nHole ${i + 1} "${h.name}", par ${h.par}: ${distTo(h.tee, h.basket).toFixed(0)} m tee to basket, about ${pathLength(h).toFixed(0)} m along the fairway`);
+  // a careful route: the best grid throw each time
+  let lie: Vec = h.tee, strokes = 0, holed = false;
+  const steps: string[] = [];
+  while (!holed && strokes < 8) {
+    const best = search(h, lie)[0];
+    strokes += 1 + (best.r.penalty ? 1 : 0);
+    steps.push(`${fmtTh(h, lie, best.th)} → ${best.r.holed ? 'IN' : `${distTo(best.r.lie, h.basket).toFixed(1)} m left`}`);
+    holed = best.r.holed; lie = best.r.lie;
+  }
+  check(holed && strokes <= h.par, `best-input route in ${strokes}: ${steps.join('; ')}`);
+  // tee shots: how many leave a good lie, and can any be followed by a holed second (birdie)?
+  const tee = search(h, h.tee);
+  const n = tee.length;
+  const within = (m: number) => tee.filter((c) => !c.r.holed && !c.r.penalty && distTo(c.r.lie, h.basket) <= m).length;
+  const wet = tee.filter((c) => c.r.penalty).length;
+  if (process.env.DEBUG_HOLE) console.log(tee.slice(0,3).map(c=>fmtTh(h,h.tee,c.th)));
+  console.log(`  tee grid ${n}: aces ${tee.filter((c) => c.r.holed).length}, within 22 m ${pct(within(22), n)}, within 35 m ${pct(within(35), n)}, in the water ${pct(wet, n)}`);
+  // a forgiving tee shot: the top candidates, judged over a neighbourhood of slightly-off inputs
+  // (±3° aim, ±4% power, ±0.1 curve), so a real player has a margin for error.
+  const robust = tee.filter((c) => !c.r.holed).slice(0, 200).map((c) => {
+    const ds: number[] = []; let wetN = 0;
+    for (const da of [-3, 0, 3]) for (const dp of [-0.04, 0, 0.04]) for (const dc of [-0.1, 0, 0.1]) {
+      const r = simulate(h, h.tee, { ...c.th, aim: c.th.aim + rad(da), power: Math.min(1, c.th.power + dp), curve: Math.max(-1, Math.min(1, c.th.curve + dc)) });
+      if (r.penalty) wetN++;
+      ds.push(r.holed ? 0 : distTo(r.lie, h.basket) + (r.penalty ? 20 : 0));
+    }
+    return { c, mean: ds.reduce((a, x) => a + x, 0) / ds.length, worst: Math.max(...ds), wetN };
+  }).sort((a, b) => a.mean - b.mean)[0];
+  robustTee[h.name] = robust.c;
+  const need = h.par - 1; // throws left after the drive, for par
+  check(robust.mean <= (need >= 2 ? 45 : 16),
+    `forgiving tee shot: ${fmtTh(h, h.tee, robust.c.th)}; slightly-off inputs leave ${robust.mean.toFixed(1)} m on average (worst ${robust.worst.toFixed(1)} m, ${robust.wetN}/27 wet) → par needs ${need === 1 ? 'one putt' : 'an approach and a putt'} from there`);
+  if (need >= 2) {
+    // ... and from that lie, an approach that reliably reaches easy putting range (≤ 6 m)
+    const lie2 = robust.c.r.lie;
+    const app = search(h, lie2).filter((c) => !c.r.penalty).slice(0, 60).map((c) => {
+      const ds: number[] = [];
+      for (const da of [-2, 0, 2]) for (const dp of [-0.04, 0, 0.04]) {
+        const r = simulate(h, lie2, { ...c.th, aim: c.th.aim + rad(da), power: Math.min(1, c.th.power + dp) });
+        ds.push(r.holed ? 0 : distTo(r.lie, h.basket) + (r.penalty ? 20 : 0));
+      }
+      return { c, worst: Math.max(...ds) };
+    }).sort((a, b) => a.worst - b.worst)[0];
+    check(app.worst <= 7, `...then an approach (${fmtTh(h, lie2, app.c.th)}) leaves at most ${app.worst.toFixed(1)} m even when slightly off, for a tap-in par`);
+  }
+  if (h.par >= 3) {
+    let birdieLies = 0;
+    const tried = tee.filter((c) => !c.r.holed && !c.r.penalty).slice(0, 6);
+    for (const c of tried) if (search(h, c.r.lie, 3).some((x) => x.r.holed)) birdieLies++;
+    console.log(`  birdie: from the 6 best tee shots, ${birdieLies} leave a lie where some second throw goes in`);
+    check(birdieLies > 0, 'birdie is possible');
+  }
+});
+
+// hole 2: the bridge blocks the straight line, and the water penalty
+{
+  const h = HOLES[1];
+  for (const p of [0.7, 0.85, 1]) {
+    const r = simulate(h, h.tee, { aim: bearing(h.tee, h.basket), power: p, curve: 0, kind: DRIVER });
+    check(r.events.includes('rail') && !r.holed, `hole 2: straight ${p * 100}% drive hits the bridge rail${r.penalty ? ', drops in the stream (+1)' : ''} (ends ${distTo(r.lie, h.tee).toFixed(1)} m out)`);
+  }
+  // find a lay-up that comes up short in the water, left of the bridge
+  let wetCase: ReturnType<typeof simulate> | null = null, wetP = 0;
+  for (let p = 0.15; p <= 0.8 && !wetCase; p += 0.01) {
+    const r = simulate(h, h.tee, { aim: bearing(h.tee, h.basket) - rad(14), power: p, curve: 0, kind: DRIVER });
+    if (r.penalty) { wetCase = r; wetP = p; }
+  }
+  if (!wetCase) check(false, 'hole 2: found a throw that stops in the stream');
+  else {
+    const dryOk = surfaceAt(h, wetCase.lie) !== 'water';
+    const sameSide = distTo(wetCase.lie, h.tee) < distTo(wetCase.disc, h.tee);
+    check(dryOk && sameSide && distTo(wetCase.lie, wetCase.disc) < 8,
+      `hole 2: ${(wetP * 100).toFixed(0)}% drive 14° left stops in the stream → penalty, replayed from the tee-side bank ${distTo(wetCase.lie, wetCase.disc).toFixed(1)} m back (${surfaceAt(h, wetCase.lie)})`);
+  }
+  const over = robustTee[h.name].r;
+  check(!over.penalty && over.lie.y < -45, `hole 2: the forgiving drive flies over the stream with no penalty (ends ${distTo(over.lie, h.tee).toFixed(0)} m out, on the ${surfaceAt(h, over.lie)})`);
+  // lay up short, then over: also par-able
+  const lay = simulate(h, h.tee, { aim: bearing(h.tee, h.basket) - rad(10), power: 0.2, curve: 0, kind: DRIVER });
+  check(!lay.penalty && lay.lie.y > -22, `hole 2: a lay-up (20% drive) stops dry short of the stream, ${distTo(lay.lie, h.basket).toFixed(0)} m out`);
+}
+// hole 3: the hill
+{
+  const h = HOLES[2];
+  const hill = h.hills![0];
+  // putt from below the hill that lands on the slope and rolls back
+  const from = { x: hill.x, y: hill.y + 24 };
+  let rolled: { land: number; end: number; p: number } | null = null;
+  for (let p = 0.3; p <= 1 && !rolled; p += 0.02) {
+    const th = { aim: bearing(from, hill) + 0.06, power: p, curve: 0, kind: PUTTER };
+    const r = simulate(h, from, th);
+    // where did it land? re-run and catch the land event
+    let landAt = Infinity;
+    const end = distTo(r.lie, hill);
+    if (r.events.includes('land')) {
+      // replay to find the landing point
+      const d = launch(from, th);
+      while (d.phase === 'flight') step(h, d);
+      landAt = distTo(d, hill);
+    }
+    if (landAt > hill.top + 1 && landAt < hill.base - 2 && end > landAt + 1) rolled = { land: landAt, end, p };
+  }
+  check(!!rolled, `hole 3: short on the slope rolls back down${rolled ? ` (${(rolled.p * 100).toFixed(0)}% putt from 24 m: lands ${rolled.land.toFixed(1)} m from the pin, rolls back to ${rolled.end.toFixed(1)} m)` : ''}`);
+  // a disc on the flat top stays put
+  const top = simulate(h, { x: hill.x, y: hill.y + 9 }, { aim: -Math.PI / 2 + 0.25, power: 0.35, curve: 0, kind: PUTTER });
+  check(distTo(top.lie, hill) <= hill.top + 0.5 || top.holed, `hole 3: a gentle putt that stops on the flat top stays there (${distTo(top.lie, hill).toFixed(1)} m from the pin)`);
+}
+
 console.log(failures ? `${failures} FAILED` : 'all disc golf checks passed');
 process.exit(failures ? 1 : 0);

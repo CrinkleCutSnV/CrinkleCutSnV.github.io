@@ -6,7 +6,13 @@ export const FIXED_DT = 1 / 240;
 
 export interface Vec { x: number; y: number }
 export interface Tree { x: number; y: number; r: number; hit: number } // r = canopy (drawn), hit = collision radius
-export type Surface = 'fairway' | 'rough' | 'tee';
+export type Surface = 'fairway' | 'rough' | 'tee' | 'water' | 'bridge';
+/** A stream: a centre line and half-width. A disc that stops in it is a penalty. */
+export interface Stream { path: Vec[]; halfWidth: number }
+/** A footbridge: deck centre, axis angle (radians), length along the axis, width. The side rails block discs. */
+export interface Bridge { x: number; y: number; angle: number; length: number; width: number }
+/** A round hill: flat top out to `top` m, sloping down to `base` m; `push` is the peak downhill pull (m/s²). */
+export interface Hill { x: number; y: number; top: number; base: number; push: number }
 
 export interface Hole {
   name: string;
@@ -18,6 +24,11 @@ export interface Hole {
   fairwayHalfWidth: number;
   trees: Tree[];
   bounds: { minX: number; maxX: number; minY: number; maxY: number };
+  water?: Stream[];
+  bridges?: Bridge[];
+  hills?: Hill[];
+  /** a line of advice for the hole intro */
+  tip: string;
 }
 
 export interface DiscKind {
@@ -39,8 +50,8 @@ export const PHYS = {
   minLand: 0.8, // ...or below this speed
   turnMax: 0.95, // rad/s of turn at full curve once the disc has slowed right down
   turnEarly: 0.18, // fraction of that turn rate straight out of the hand
-  skidKeep: { fairway: 0.6, tee: 0.6, rough: 0.2 } as Record<Surface, number>,
-  friction: { fairway: 4, tee: 4, rough: 12 } as Record<Surface, number>, // m/s² while sliding
+  skidKeep: { fairway: 0.6, tee: 0.6, rough: 0.2, bridge: 0.6, water: 0 } as Record<Surface, number>,
+  friction: { fairway: 4, tee: 4, rough: 12, bridge: 4, water: 99 } as Record<Surface, number>, // m/s² while sliding
   treeBounce: 0.32,
   // The chains: a slow disc anywhere within catchRadius of the pole drops in. Above
   // catchSoftSpeed the disc has to be more and more central to be caught, down to
@@ -54,6 +65,8 @@ export const PHYS = {
   clangKeep: 0.18, clangMax: 4.5, // bounce-back speed: fraction, cap (m/s)
   skipKeep: 0.4, skipMax: 7, // carry-on speed after skipping past: fraction, cap (m/s)
   poleRadius: 0.22, // a sliding disc bumps the pole
+  railRadius: 0.3, // bridge rails: collision half-thickness
+  railBounce: 0.3,
   launchHeight: 1.1,
 };
 
@@ -95,8 +108,71 @@ export const HOLES: Hole[] = [
       { x: 46, y: -36, r: 3.5, hit: 2.8 },
     ],
     bounds: { minX: -26, maxX: 68, minY: -94, maxY: 14 },
+    tip: 'Bend it right round the oak.',
+  },
+  // ---- Hole 2: "Troll Bridge", par 3. A stream cuts across, and the footbridge sits
+  // right on the straight line, rails and all. Curve round it, or lay up and go over.
+  {
+    name: 'Troll Bridge',
+    par: 3,
+    tee: { x: 0, y: 0 },
+    basket: { x: 0, y: -112 },
+    fairway: cubic({ x: 0, y: 4 }, { x: 7, y: -40 }, { x: -7, y: -76 }, { x: 0, y: -117 }, 48),
+    fairwayHalfWidth: 8,
+    water: [{ path: wavy(-40, 40, (x) => -27 - 8 * Math.sin(x / 14)), halfWidth: 3.6 }],
+    bridges: [{ x: 0, y: -27, angle: Math.atan2(-8 / 14, 1) + Math.PI / 2, length: 12, width: 3.2 }],
+    trees: [
+      // willows on the banks either side of the bridge
+      { x: -15, y: -17, r: 4.5, hit: 3.6 },
+      { x: 15, y: -38, r: 4.5, hit: 3.6 },
+      { x: -27, y: -29, r: 4, hit: 3.2 },
+      { x: 28, y: -44, r: 4, hit: 3.2 },
+      // guarding the basket
+      { x: -9, y: -96, r: 3.6, hit: 2.9 },
+      { x: 11, y: -101, r: 3.4, hit: 2.7 },
+      { x: -4, y: -126, r: 4, hit: 3.2 },
+      // the walk to the stream
+      { x: -21, y: 2, r: 3.8, hit: 3 },
+      { x: 20, y: -18, r: 4, hit: 3.2 },
+      { x: -14, y: -58, r: 4, hit: 3.2 },
+      { x: 24, y: -90, r: 4, hit: 3.2 },
+      { x: -24, y: -80, r: 4.2, hit: 3.4 },
+    ],
+    bounds: { minX: -34, maxX: 34, minY: -132, maxY: 12 },
+    tip: 'Mind the bridge rails, and the water. Curve round, or lay up short.',
+  },
+  // ---- Hole 3: "King of the Hill", par 3. An S-bend up to a basket perched on a round
+  // hill. Land on the flat top and it stays; come up short on the slope and it rolls back down.
+  {
+    name: 'King of the Hill',
+    par: 3,
+    tee: { x: 0, y: 0 },
+    basket: { x: 22, y: -92 },
+    fairway: cubic({ x: 0, y: 4 }, { x: -18, y: -38 }, { x: 40, y: -52 }, { x: 22, y: -94 }, 48),
+    fairwayHalfWidth: 8,
+    hills: [{ x: 22, y: -92, top: 4.5, base: 14, push: 7 }],
+    trees: [
+      { x: 14, y: -22, r: 4.5, hit: 3.6 },
+      { x: 24, y: -36, r: 3.5, hit: 2.8 },
+      { x: -16, y: -60, r: 4.5, hit: 3.6 },
+      { x: -2, y: -74, r: 4, hit: 3.2 },
+      { x: 2, y: -48, r: 3.4, hit: 2.7 },
+      { x: 44, y: -70, r: 4, hit: 3.2 },
+      { x: 46, y: -104, r: 4.5, hit: 3.6 },
+      { x: 4, y: -108, r: 4, hit: 3.2 },
+      { x: -18, y: -14, r: 3.5, hit: 2.8 },
+      { x: 40, y: -30, r: 4, hit: 3.2 },
+    ],
+    bounds: { minX: -30, maxX: 58, minY: -118, maxY: 12 },
+    tip: 'Land it on the flat top. Short on the slope and it rolls back down!',
   },
 ];
+
+function wavy(x0: number, x1: number, f: (x: number) => number): Vec[] {
+  const out: Vec[] = [];
+  for (let x = x0; x <= x1 + 1e-6; x += 2) out.push({ x, y: f(x) });
+  return out;
+}
 
 // ---- geometry helpers ---------------------------------------------------------------
 export const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -109,8 +185,47 @@ export function segDist(p: Vec, a: Vec, b: Vec) {
   return { d: Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)), t };
 }
 
+/** Bridge-local coordinates: along the deck axis, and across it. */
+export function bridgeLocal(b: Bridge, p: Vec) {
+  const ax = Math.cos(b.angle), ay = Math.sin(b.angle);
+  const dx = p.x - b.x, dy = p.y - b.y;
+  return { along: dx * ax + dy * ay, across: -dx * ay + dy * ax };
+}
+/** The two side rails as segments. */
+export function bridgeRails(b: Bridge): [Vec, Vec][] {
+  const ax = Math.cos(b.angle), ay = Math.sin(b.angle);
+  const nx = -ay, ny = ax;
+  const L = b.length / 2, W = b.width / 2;
+  return [-1, 1].map((k) => [
+    { x: b.x - ax * L + nx * W * k, y: b.y - ay * L + ny * W * k },
+    { x: b.x + ax * L + nx * W * k, y: b.y + ay * L + ny * W * k },
+  ] as [Vec, Vec]);
+}
+export const inStream = (w: Stream, p: Vec) => {
+  for (let i = 0; i < w.path.length - 1; i++) if (segDist(p, w.path[i], w.path[i + 1]).d <= w.halfWidth) return true;
+  return false;
+};
+
+/** Downhill pull (m/s²) at p from any hills. */
+export function slopeAt(hole: Hole, p: Vec): Vec {
+  let gx = 0, gy = 0;
+  for (const h of hole.hills ?? []) {
+    const dx = p.x - h.x, dy = p.y - h.y, r = Math.hypot(dx, dy);
+    if (r <= h.top || r >= h.base) continue;
+    const m = h.push * Math.sin((Math.PI * (r - h.top)) / (h.base - h.top));
+    gx += (dx / r) * m; gy += (dy / r) * m;
+  }
+  return { x: gx, y: gy };
+}
+
 export function surfaceAt(hole: Hole, p: Vec): Surface {
   if (Math.abs(p.x - hole.tee.x) < 1.6 && p.y < hole.tee.y + 2.6 && p.y > hole.tee.y - 2.6) return 'tee';
+  for (const b of hole.bridges ?? []) {
+    const l = bridgeLocal(b, p);
+    if (Math.abs(l.along) <= b.length / 2 && Math.abs(l.across) <= b.width / 2) return 'bridge';
+  }
+  for (const w of hole.water ?? []) if (inStream(w, p)) return 'water';
+  for (const h of hole.hills ?? []) if (distTo(p, h) < h.base) return 'fairway';
   const f = hole.fairway;
   for (let i = 0; i < f.length - 1; i++) {
     if (segDist(p, f[i], f[i + 1]).d <= hole.fairwayHalfWidth) return 'fairway';
@@ -136,14 +251,15 @@ export interface Disc {
   curve: number; // -1 hard left .. +1 hard right
   t: number;
   spin: number; // visual rotation
-  event: null | { kind: 'tree' | 'chains' | 'clang' | 'skip' | 'pole' | 'land' | 'edge' | 'stop'; t: number; speed: number };
+  event: null | { kind: 'tree' | 'chains' | 'clang' | 'skip' | 'pole' | 'land' | 'edge' | 'stop' | 'rail' | 'splash'; t: number; speed: number };
   catchSpeed: number;
+  ox: number; oy: number; // where this throw was thrown from
 }
 
 export interface Throw { aim: number; power: number; curve: number; kind: DiscKind }
 
 export const restingDisc = (p: Vec): Disc => ({
-  x: p.x, y: p.y, vx: 0, vy: 0, z: 0, phase: 'rest', v0: 0, vLand: 0, drag: 0.3, curve: 0, t: 0, spin: 0, event: null, catchSpeed: 0,
+  x: p.x, y: p.y, vx: 0, vy: 0, z: 0, phase: 'rest', v0: 0, vLand: 0, drag: 0.3, curve: 0, t: 0, spin: 0, event: null, catchSpeed: 0, ox: p.x, oy: p.y,
 });
 
 /** Launch speed for a power setting; reach is roughly proportional to it. */
@@ -161,6 +277,7 @@ export function launch(from: Vec, th: Throw): Disc {
     drag: th.kind.drag,
     vLand: Math.max(PHYS.minLand, v * PHYS.landFrac),
     curve: clamp(th.curve, -1, 1),
+    ox: from.x, oy: from.y,
   };
 }
 
@@ -223,24 +340,35 @@ export function step(hole: Hole, d: Disc, dt = FIXED_DT) {
 
     if (v <= d.vLand) {
       const surf = surfaceAt(hole, d);
+      if (surf === 'water') { splash(d, v); return; }
       const keep = PHYS.skidKeep[surf];
       d.vx *= keep; d.vy *= keep;
       d.phase = 'ground'; d.z = 0;
       d.event = { kind: 'land', t: d.t, speed: v };
     }
   } else {
-    // sliding along the grass
+    // sliding along the grass (and rolling down any slope)
     const surf = surfaceAt(hole, d);
-    const nv = v - PHYS.friction[surf] * dt;
+    if (surf === 'water') { splash(d, v); return; }
+    const g = slopeAt(hole, d);
+    const gm = Math.hypot(g.x, g.y);
+    const mu = PHYS.friction[surf];
+    let vx = d.vx + g.x * dt, vy = d.vy + g.y * dt;
+    const sp = Math.hypot(vx, vy);
+    const nv = sp - mu * dt;
     if (nv <= 0.05) {
-      d.vx = d.vy = 0;
-      d.phase = 'rest';
-      d.event = { kind: 'stop', t: d.t, speed: 0 };
-      return;
-    }
-    d.vx *= nv / v; d.vy *= nv / v;
+      if (gm <= mu * 1.1) {
+        d.vx = d.vy = 0;
+        d.phase = 'rest';
+        d.event = { kind: 'stop', t: d.t, speed: 0 };
+        return;
+      }
+      // too steep to stay put: it starts rolling downhill
+      vx = (g.x / gm) * 0.08; vy = (g.y / gm) * 0.08;
+    } else { vx *= nv / sp; vy *= nv / sp; }
+    d.vx = vx; d.vy = vy;
     d.x += d.vx * dt; d.y += d.vy * dt;
-    d.spin += dt * v * 2;
+    d.spin += dt * Math.hypot(vx, vy) * 2;
     if (distTo(d, hole.basket) < PHYS.poleRadius) {
       bounceOff(d, hole.basket, PHYS.poleRadius, 0.2);
       d.event = { kind: 'pole', t: d.t, speed: v };
@@ -253,6 +381,18 @@ export function step(hole: Hole, d: Disc, dt = FIXED_DT) {
       bounceOff(d, tr, tr.hit, PHYS.treeBounce);
       if (d.phase === 'flight') { d.phase = 'ground'; d.z = 0; }
       d.event = { kind: 'tree', t: d.t, speed: v };
+    }
+  }
+  // bridge rails
+  for (const br of hole.bridges ?? []) {
+    for (const [a, b] of bridgeRails(br)) {
+      const sd = segDist(d, a, b);
+      if (sd.d < PHYS.railRadius) {
+        const c = { x: a.x + (b.x - a.x) * sd.t, y: a.y + (b.y - a.y) * sd.t };
+        bounceOff(d, c, PHYS.railRadius, PHYS.railBounce);
+        if (d.phase === 'flight') { d.phase = 'ground'; d.z = 0; }
+        d.event = { kind: 'rail', t: d.t, speed: v };
+      }
     }
   }
   // the edge of the course is thick hedge: the disc stops there
@@ -297,7 +437,30 @@ export function basketOutcome(v: number, basket: Vec, p0: Vec, p1: Vec) {
   return { kind: 'skip' as const, miss, x: cx + nx * 0.15, y: cy + ny * 0.15, vx: (ux * c + nx * s) * sp, vy: (uy * c + ny * s) * sp };
 }
 
-export interface SimResult { disc: Disc; path: Vec[]; holed: boolean; events: string[]; time: number }
+function splash(d: Disc, v: number) {
+  d.vx = d.vy = 0; d.z = 0;
+  d.phase = 'rest';
+  d.event = { kind: 'splash', t: d.t, speed: v };
+}
+
+/**
+ * Where a disc that went in the water is played from: back along the line it came,
+ * onto the bank on the side it was thrown from, a step clear of the water.
+ */
+export function dryLie(hole: Hole, wet: Vec, from: Vec): Vec {
+  const L = distTo(wet, from);
+  const ux = (from.x - wet.x) / (L || 1), uy = (from.y - wet.y) / (L || 1);
+  for (let s = 0; s <= L; s += 0.25) {
+    const p = { x: wet.x + ux * s, y: wet.y + uy * s };
+    if (surfaceAt(hole, p) !== 'water') {
+      const q = { x: p.x + ux * 1.2, y: p.y + uy * 1.2 };
+      return s + 1.2 <= L && surfaceAt(hole, q) !== 'water' ? q : p;
+    }
+  }
+  return { ...from };
+}
+
+export interface SimResult { disc: Disc; path: Vec[]; holed: boolean; events: string[]; time: number; penalty: boolean; lie: Vec }
 
 /** Run a throw to completion (headless). */
 export function simulate(hole: Hole, from: Vec, th: Throw): SimResult {
@@ -311,5 +474,7 @@ export function simulate(hole: Hole, from: Vec, th: Throw): SimResult {
     if (i % 12 === 0) path.push({ x: d.x, y: d.y });
   }
   path.push({ x: d.x, y: d.y });
-  return { disc: d, path, holed: d.phase === 'holed', events, time: d.t };
+  const penalty = d.event?.kind === 'splash';
+  const lie = penalty ? dryLie(hole, d, from) : { x: d.x, y: d.y };
+  return { disc: d, path, holed: d.phase === 'holed', events, time: d.t, penalty, lie };
 }
