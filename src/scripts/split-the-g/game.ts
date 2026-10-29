@@ -1,5 +1,5 @@
 import {
-  BEST_KEY, CHARACTERS, FIXED_DT, bestKeyFor, GLASS, TARGET, characterById, judge, pourPint, predictFinal, radiusAt, startDrinking, step, stopDrinking, visibleLine,
+  BEST_KEY, CHARACTERS, FIXED_DT, bestKeyFor, GLASS, G_MARK, TARGET, characterById, judge, pourPint, predictFinal, radiusAt, startDrinking, step, stopDrinking, visibleLine,
   type Character, type Expression, type Pint, type Verdict,
 } from './physics';
 import { drawArm, drawBar, drawBody, drawFace, drawGlass, drawGlug, drawHand, drawPortrait, drawPub, glassToScreen, type GlassView, type Pose } from './scene';
@@ -7,11 +7,11 @@ import { readNumber, saveRecord } from '../scores';
 import { awardMedal, medalPopHtml } from '../medals';
 import { SPLIT_MEDALS } from '../../data/medals';
 
-const POUR_TIME = 1.8; // s for the pint to settle before you're allowed a go
+const POUR_TIME = 2.8; // s for the pint to settle (while the 'Up next' card shows) before you're allowed a go
 const NEED_V = 288; // mm of scene above the bar, glass foot to the top of a tipped-back head
 const NEED_H = 236; // mm across, back of the head to the far side of the glass
 
-type GamePhase = 'pick' | 'pouring' | 'ready' | 'drinking' | 'settling' | 'result';
+type GamePhase = 'pouring' | 'ready' | 'drinking' | 'settling' | 'result';
 
 const pickOne = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 const dots = (n: number) => '●'.repeat(n) + '○'.repeat(4 - n);
@@ -24,16 +24,18 @@ export function initSplitTheG(root: HTMLElement) {
   const ui = {
     who: $('[data-who]'), whoName: $('[data-who-name]'), whoDiff: $('[data-who-diff]'), best: $('[data-best]'),
     bubble: $('[data-bubble]'), hint: $('[data-hint]'), hintMain: $('[data-hint-main]'), hintSub: $('[data-hint-sub]'),
-    pick: $('[data-pick]'), lineup: $('[data-lineup]'), random: $<HTMLButtonElement>('[data-random]'),
+    intro: $('[data-intro]'), introFace: $<HTMLCanvasElement>('[data-intro-face]'), introName: $('[data-intro-name]'),
+    introTag: $('[data-intro-tag]'), introQuirk: $('[data-intro-quirk]'), introGo: $<HTMLButtonElement>('[data-intro-go]'),
+    lineup: root.parentElement!.querySelector<HTMLElement>('[data-lineup]'),
     end: $('[data-end]'), endCard: $('.end-card'), rating: $('[data-end-rating]'), mm: $('[data-end-mm]'), where: $('[data-end-where]'),
     remark: $('[data-end-remark]'), medal: $('[data-end-medal]'), endBest: $('[data-end-best]'),
-    again: $<HTMLButtonElement>('[data-again]'), change: $<HTMLButtonElement>('[data-change]'),
+    again: $<HTMLButtonElement>('[data-again]'),
   };
 
   let w = 0, h = 0, dpr = 1;
-  let phase: GamePhase = 'pick';
+  let phase: GamePhase = 'pouring';
   let char: Character = CHARACTERS[0];
-  let surprise = false;
+  let lastId: string | null = null; // never the same drinker twice in a row
   let pint: Pint | null = null;
   let phaseT = 0; // seconds in the current phase
   let clock = 0;
@@ -46,48 +48,45 @@ export function initSplitTheG(root: HTMLElement) {
   let autoRelease: number | null = null;
   let regionShift = 0; // 0 = scene centred, 1 = making room for the result card
 
-  // ---- the line-up ----
-  CHARACTERS.forEach((c) => {
-    const li = document.createElement('li');
-    li.innerHTML = `<button type="button" data-char="${c.id}"><canvas width="72" height="72" aria-hidden="true"></canvas>`
-      + `<strong>${c.name}</strong><span class="tag">${c.tagline}</span>`
-      + `<span class="quirk"><b>Quirk:</b> ${c.quirk} <span class="diffdots" title="Trickiness ${c.difficulty} of 4">${dots(c.difficulty)}</span></span></button>`;
-    ui.lineup.append(li);
-    li.querySelector('button')!.addEventListener('click', () => { surprise = false; newPint(c); });
-  });
-  const portraits = () => ui.lineup.querySelectorAll<HTMLButtonElement>('[data-char]').forEach((b) => drawPortrait(b.querySelector('canvas')!, characterById(b.dataset.char!)));
-  ui.random.addEventListener('click', () => { surprise = true; newPint(randomChar()); });
-  ui.who.addEventListener('click', () => { if (phase !== 'drinking' && phase !== 'settling') openPick(); });
-  ui.change.addEventListener('click', openPick);
-  ui.again.addEventListener('click', () => newPint(surprise ? randomChar() : char));
+  // ---- meet the regulars (view only: the pub picks your drinker) ----
+  if (ui.lineup) {
+    CHARACTERS.forEach((c) => {
+      const li = document.createElement('li');
+      li.dataset.char = c.id;
+      li.innerHTML = `<canvas width="72" height="72" aria-hidden="true"></canvas>`
+        + `<strong>${c.name}</strong><span class="tag">${c.tagline}</span>`
+        + `<span class="quirk"><b>Quirk:</b> ${c.quirk} <span class="diffdots" title="Trickiness ${c.difficulty} of 4">${dots(c.difficulty)}</span></span>`;
+      ui.lineup!.append(li);
+      drawPortrait(li.querySelector('canvas')!, c);
+    });
+  }
+  ui.again.addEventListener('click', () => newPint(randomChar()));
+  ui.introGo.addEventListener('click', () => { if (phase === 'pouring') phaseT = POUR_TIME; });
 
   function randomChar() {
-    const others = CHARACTERS.filter((c) => c.id !== char.id || CHARACTERS.length === 1);
+    const others = CHARACTERS.filter((c) => c.id !== lastId || CHARACTERS.length === 1);
     return pickOne(others);
   }
   function setPhase(p: GamePhase) { phase = p; phaseT = 0; root.dataset.phase = p; }
-  function openPick() {
-    setPhase('pick');
-    ui.pick.classList.remove('is-hidden');
-    ui.end.classList.add('is-hidden');
-    ui.hint.classList.add('is-hidden');
-    ui.bubble.classList.add('is-hidden');
-    portraits();
-    ui.lineup.querySelector<HTMLButtonElement>(`[data-char="${char.id}"]`)?.focus({ preventScroll: true });
-  }
   function newPint(c: Character) {
-    char = c;
+    char = c; lastId = c.id;
     pint = pourPint(c, seedOverride ?? Math.floor(Math.random() * 2 ** 31));
     seedOverride = null;
     verdict = null; tash = 0; k = 0; acc = 0;
     setPhase('pouring');
-    ui.pick.classList.add('is-hidden');
     ui.end.classList.add('is-hidden');
-    ui.whoName.textContent = surprise ? `🎲 ${c.name}` : c.name;
+    ui.whoName.textContent = c.name;
     ui.whoDiff.textContent = dots(c.difficulty);
     ui.whoDiff.title = `Trickiness ${c.difficulty} of 4`;
-    say(pickOne(c.quips.before));
-    showHint('Let it settle…', 'Never rush a pint.');
+    // the 'Up next' card: who the pub has lined up for this pint
+    ui.introName.textContent = c.name;
+    ui.introTag.textContent = c.tagline;
+    ui.introQuirk.innerHTML = `<b>Quirk:</b> ${c.quirk} <span class="diffdots" title="Trickiness ${c.difficulty} of 4">${dots(c.difficulty)}</span>`;
+    drawPortrait(ui.introFace, c);
+    ui.intro.classList.remove('is-hidden');
+    ui.bubble.classList.add('is-hidden');
+    ui.hint.classList.add('is-hidden');
+    ui.introGo.focus({ preventScroll: true });
     updateBest();
   }
   function say(text: string) {
@@ -189,6 +188,9 @@ export function initSplitTheG(root: HTMLElement) {
     clock += dt; phaseT += dt;
     if (phase === 'pouring' && phaseT >= POUR_TIME) {
       setPhase('ready');
+      ui.intro.classList.add('is-hidden');
+      if (root.contains(document.activeElement)) (document.activeElement as HTMLElement).blur(); // so Space drinks
+      say(pickOne(char.quips.before));
       showHint(matchMedia('(hover: none)').matches ? 'Press and hold to drink' : 'Press and hold to drink (or hold Space)', 'Let go to stop. One gulp per pint!');
     }
     if (pint && (phase === 'drinking' || phase === 'settling')) {
@@ -218,7 +220,7 @@ export function initSplitTheG(root: HTMLElement) {
     ui.endCard.dataset.band = v.band;
     ui.rating.textContent = v.rating;
     ui.mm.textContent = fmtMm(v.mm);
-    ui.where.textContent = pint.emptied ? 'below the G (the pint’s gone!)' : v.mm === 0 ? 'dead centre of the G' : `${v.signed > 0 ? 'above' : 'below'} the middle of the G`;
+    ui.where.textContent = pint.emptied ? 'below the G (the pint’s gone!)' : v.mm === 0 ? 'dead on the split line' : `${v.signed > 0 ? 'above' : 'below'} the split line`;
     ui.remark.textContent = v.remark;
     const medal = awardMedal(SPLIT_MEDALS, v.mm);
     ui.medal.innerHTML = medalPopHtml(medal);
@@ -236,7 +238,7 @@ export function initSplitTheG(root: HTMLElement) {
     say(pickOne(v.band === 'perfect' || v.band === 'great' ? q.great : v.band === 'good' ? q.good : q.bad));
     ui.hint.classList.add('is-hidden');
     ui.end.classList.remove('is-hidden');
-    ui.again.textContent = surprise ? 'Next pint 🎲' : `Another pint for ${first}`;
+    ui.again.textContent = 'Next pint 🎲';
     ui.again.focus({ preventScroll: true });
   }
 
@@ -245,7 +247,7 @@ export function initSplitTheG(root: HTMLElement) {
     if (phase === 'result' && verdict) {
       return verdict.band === 'perfect' ? 'chuffed' : verdict.band === 'great' || verdict.band === 'good' ? 'happy' : verdict.band === 'fair' ? 'nervous' : 'gutted';
     }
-    if (char.id === 'nigel' && phase !== 'pick') return 'nervous';
+    if (char.id === 'nigel') return 'nervous';
     return 'idle';
   }
 
@@ -255,7 +257,7 @@ export function initSplitTheG(root: HTMLElement) {
     const { s, barY, gv, head } = sc;
     drawPub(ctx, w, h, barY, clock);
     const pose: Pose = { x: head.x, y: head.y, R: head.R, expr: expression(), t: clock, tash, puff: phase === 'drinking' ? 0.5 + 0.5 * Math.sin(clock * 9) : 0 };
-    const showChar = phase !== 'pick' || true;
+    const showChar = true;
     if (showChar) { drawBody(ctx, char, pose, h); drawFace(ctx, char, pose); }
     drawBar(ctx, w, h, barY);
     const grip = glassToScreen(gv, -(radiusAt(60) + 2.6), GLASS.base + 60);
@@ -294,7 +296,7 @@ export function initSplitTheG(root: HTMLElement) {
       ctx.fillStyle = '#2b2d42'; ctx.fillText(text, x + 6, y + 1);
     };
     const gap = Math.abs(yT - yL) < (small ? 20 : 24) ? (small ? 20 : 24) * Math.sign(yL - yT || 1) : 0;
-    tag('Middle of the G', gv.x + tx, yT - (gap ? Math.abs(gap) / 2 : 0), '#ffd84a');
+    tag('Split line', gv.x + tx, yT - (gap ? Math.abs(gap) / 2 : 0), '#ffd84a');
     if (!pintEmpty()) tag(`Your line ${v.signed > 0 ? '+' : v.signed < 0 ? '−' : '±'}${fmtMm(v.mm)}`, gv.x + tx, yL + (gap ? Math.abs(gap) / 2 : 0), v.mm <= SPLIT_MEDALS.thresholds.silver ? '#bff0c8' : '#ffc2b0');
     ctx.restore();
   }
@@ -302,16 +304,22 @@ export function initSplitTheG(root: HTMLElement) {
 
   // debug/test hooks (harmless in production)
   (window as any).__splitTheG = {
-    pick: (id: string) => { surprise = id === 'random'; newPint(surprise ? randomChar() : characterById(id)); },
+    pick: (id: string) => newPint(id === 'random' ? randomChar() : characterById(id)), // tests only: the game always picks at random
+    next: () => newPint(randomChar()),
     seed: (n: number) => { seedOverride = n; },
     skipPour: () => { if (phase === 'pouring') phaseT = POUR_TIME; },
     set autoRelease(v: number | null) { autoRelease = v; },
     get state() {
-      return { phase, char: char.id, line: pint ? visibleLine(pint) : null, target: TARGET, verdict, k, pintPhase: pint?.phase, emptied: pint?.emptied };
+      // where the G, the split line and the beer line are on screen (CSS px, canvas-relative), for tests
+      const { gv, s } = scene();
+      const y = (v: number) => glassToScreen(gv, 0, GLASS.base + v).y;
+      const line = pint ? visibleLine(pint) : null;
+      const geo = { s, glassX: gv.x, glassY: gv.y, angle: gv.angle, gLeft: gv.x - G_MARK.R * s, gRight: gv.x + G_MARK.R * s, gTop: y(G_MARK.top), gBottom: y(G_MARK.bottom), bar: y(G_MARK.barY), curl: y(G_MARK.curl.v), target: y(TARGET), line: line === null ? null : y(line), rimTop: y(GLASS.height + 4), foot: gv.y };
+      return { phase, char: char.id, line, target: TARGET, g: { ...G_MARK }, geo, verdict, k, pintPhase: pint?.phase, emptied: pint?.emptied };
     },
   };
 
   updateBest();
-  openPick();
+  newPint(randomChar());
   requestAnimationFrame(frame);
 }

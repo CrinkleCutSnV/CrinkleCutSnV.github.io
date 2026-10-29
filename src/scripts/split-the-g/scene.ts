@@ -233,36 +233,59 @@ export function drawGlass(ctx: Ctx, gv: GlassView, pint: Pint | null, look: Pint
   ctx.restore();
 }
 
-/** Our own chunky G, with its bar at exactly the middle (the target), and the parody brand underneath. */
+/** The G's centreline as points in glass mm (u across, v up), each with a stroke width, all from G_MARK. */
+export function gOutline() {
+  const g = G_MARK;
+  const pts: { u: number; v: number; w: number }[] = [];
+  const { thin, thick } = g.stroke;
+  // stress like a pen held at an angle: thickest down the left, hairline over the top and bottom
+  const width = (a: number) => thin + (thick - thin) * Math.max(0, -Math.cos(a - 0.25)) ** 1.6;
+  // 1. the curl: a little spiral tucked inside the ring, unwinding out to meet it at the top right
+  const turns = 1.15 * Math.PI * 2;
+  for (let i = 0; i <= 40; i++) {
+    const t = i / 40; // 0 = centre of the curl, 1 = where it joins the ring
+    const a = g.startAngle - turns * (1 - t);
+    const r = g.curlR * (0.15 + 0.85 * t);
+    pts.push({ u: g.curl.u + r * Math.cos(a), v: g.curl.v + r * Math.sin(a), w: thin * (0.9 + 0.5 * (1 - t)) });
+  }
+  // 2. the ring: anticlockwise over the top, down the left and round to meet the bar on the right
+  const end = Math.PI * 2 + g.barEndAngle;
+  for (let i = 1; i <= 120; i++) {
+    const a = g.startAngle + ((end - g.startAngle) * i) / 120;
+    pts.push({ u: g.R * Math.cos(a), v: g.cy + g.R * Math.sin(a), w: width(a) });
+  }
+  // 3. the bar: straight in from the ring towards the middle, a firm horizontal
+  for (let i = 1; i <= 12; i++) {
+    const u = g.barFrom + ((g.barTo - g.barFrom) * i) / 12;
+    pts.push({ u, v: g.barY, w: thin * 1.5 });
+  }
+  return pts;
+}
+
+/** Our own slender G (its geometry is G_MARK, the same numbers the scoring uses), and the parody brand underneath. */
 function drawMark(ctx: Ctx, s: number) {
-  const cy = -(GLASS.base + TARGET) * s;
-  const R = ((G_MARK.top - G_MARK.bottom) / 2 - 2.6) * s; // centreline radius
-  const lw = 5.2 * s;
+  const pts = gOutline();
+  const X = (u: number) => u * s, Y = (v: number) => -(GLASS.base + v) * s;
   ctx.save();
   ctx.lineCap = 'round';
-  const gPath = () => {
-    ctx.beginPath();
-    ctx.arc(0, cy, R, -0.72, 0, true); // from the top-right tip, anticlockwise right round to 3 o'clock
-    ctx.lineTo(R * 0.12, cy); // the bar, at mid-height
-  };
   ctx.lineJoin = 'round';
-  gPath();
-  ctx.strokeStyle = 'rgba(43,22,10,.55)';
-  ctx.lineWidth = lw + Math.max(2, 1 * s);
-  ctx.stroke();
-  gPath();
-  const gold = ctx.createLinearGradient(0, cy - R, 0, cy + R);
+  const strokeAll = (style: string | CanvasGradient, extra: number) => {
+    ctx.strokeStyle = style;
+    for (let i = 1; i < pts.length; i++) {
+      const p = pts[i - 1], q = pts[i];
+      ctx.lineWidth = Math.max(1, ((p.w + q.w) / 2) * s + extra);
+      ctx.beginPath(); ctx.moveTo(X(p.u), Y(p.v)); ctx.lineTo(X(q.u), Y(q.v)); ctx.stroke();
+    }
+  };
+  strokeAll('rgba(43,22,10,.5)', Math.max(1.5, 0.6 * s));
+  const gold = ctx.createLinearGradient(0, Y(G_MARK.top), 0, Y(G_MARK.bottom));
   gold.addColorStop(0, '#fbe7a6');
   gold.addColorStop(1, '#e2b85c');
+  strokeAll(gold, 0);
+  // a fine serif under the inner end of the bar
   ctx.strokeStyle = gold;
-  ctx.lineWidth = lw;
-  ctx.stroke();
-  // a little serif spur on the tip, so it reads as a proper G
-  ctx.beginPath();
-  ctx.moveTo(Math.cos(-0.72) * R, cy + Math.sin(-0.72) * R);
-  ctx.lineTo(Math.cos(-0.72) * R + 0.6 * s, cy + Math.sin(-0.72) * R - 3.2 * s);
-  ctx.lineWidth = lw * 0.7;
-  ctx.stroke();
+  ctx.lineWidth = Math.max(1, G_MARK.stroke.thin * s);
+  ctx.beginPath(); ctx.moveTo(X(G_MARK.barTo), Y(G_MARK.barY)); ctx.lineTo(X(G_MARK.barTo), Y(G_MARK.barY - 1.6)); ctx.stroke();
   // brand wordmark under the G
   ctx.font = `900 ${6.2 * s}px ${FONT}`;
   ctx.textAlign = 'center';
@@ -282,6 +305,7 @@ function drawMark(ctx: Ctx, s: number) {
 }
 
 function drawVerdictLines(ctx: Ctx, s: number, line: number, good: boolean) {
+  const X0 = (u: number) => u * s;
   const yT = -(GLASS.base + TARGET) * s, yL = -(GLASS.base + line) * s;
   const half = (radiusAt(TARGET) + 9) * s;
   ctx.save();
@@ -289,6 +313,22 @@ function drawVerdictLines(ctx: Ctx, s: number, line: number, good: boolean) {
   ctx.lineWidth = Math.max(2, 0.9 * s);
   ctx.strokeStyle = '#ffd84a';
   ctx.beginPath(); ctx.moveTo(-half, yT); ctx.lineTo(half + 6 * s, yT); ctx.stroke();
+  ctx.setLineDash([]);
+  // the ref's bracket: from the G's bar up to its curl, with the split line halfway
+  const yBar = -(GLASS.base + G_MARK.barY) * s, yCurl = -(GLASS.base + G_MARK.curl.v) * s;
+  const bx = -half - 3 * s;
+  ctx.strokeStyle = '#ffd84a';
+  ctx.lineWidth = Math.max(1.5, 0.5 * s);
+  ctx.beginPath();
+  ctx.moveTo(bx + 3 * s, yCurl); ctx.lineTo(bx, yCurl); ctx.lineTo(bx, yBar); ctx.lineTo(bx + 3 * s, yBar);
+  ctx.moveTo(bx - 2.5 * s, yT); ctx.lineTo(bx, yT);
+  ctx.stroke();
+  ctx.setLineDash([1 * s, 1.5 * s]);
+  ctx.strokeStyle = 'rgba(255,216,74,.6)';
+  ctx.beginPath();
+  ctx.moveTo(bx + 3 * s, yCurl); ctx.lineTo(X0(G_MARK.curl.u), yCurl);
+  ctx.moveTo(bx + 3 * s, yBar); ctx.lineTo(X0(G_MARK.barTo), yBar);
+  ctx.stroke();
   ctx.setLineDash([]);
   ctx.strokeStyle = good ? '#7bd389' : '#ff7a59';
   ctx.lineWidth = Math.max(2, 0.7 * s);

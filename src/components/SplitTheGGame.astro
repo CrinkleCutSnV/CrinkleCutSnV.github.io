@@ -2,13 +2,13 @@
 // Split the G. All logic lives in src/scripts/split-the-g/.
 import { BRAND } from '../scripts/split-the-g/physics';
 ---
-<div class="stg" data-split-the-g data-phase="pick">
+<div class="stg" data-split-the-g data-phase="pouring">
   <canvas aria-label={`Split the G. A pint of ${BRAND} on the bar. Press and hold to drink, let go to stop.`}></canvas>
 
   <div class="hud">
-    <button type="button" class="pill pill--who" data-who title="Change drinker">
-      <span data-who-name>Pick a drinker</span><span class="diff" data-who-diff></span>
-    </button>
+    <div class="pill pill--who" data-who title="This pint’s drinker (the pub picks a new one each pint)">
+      <span data-who-name>Up next…</span><span class="diff" data-who-diff></span>
+    </div>
     <div class="pill pill--best" data-best>Best: –</div>
   </div>
 
@@ -19,12 +19,16 @@ import { BRAND } from '../scripts/split-the-g/physics';
     <span data-hint-sub>Let go to stop. One gulp per pint!</span>
   </div>
 
-  <div class="pick" data-pick role="dialog" aria-label="Choose your drinker">
-    <div class="pick-card">
-      <h2>Who’s splitting the G?</h2>
-      <p class="pick-sub">Everyone drinks differently. Pick a regular, or let the pub decide.</p>
-      <ul class="lineup" data-lineup></ul>
-      <button type="button" class="btn btn--random" data-random>🎲 Surprise me (new drinker every pint)</button>
+  <div class="intro is-hidden" data-intro role="dialog" aria-live="polite" aria-label="Up next">
+    <div class="intro-card">
+      <p class="intro-kicker">Up next</p>
+      <canvas class="intro-face" data-intro-face width="96" height="96" aria-hidden="true"></canvas>
+      <div class="intro-text">
+        <h2 data-intro-name></h2>
+        <p class="intro-tag" data-intro-tag></p>
+        <p class="intro-quirk" data-intro-quirk></p>
+      </div>
+      <p class="intro-pour">Pouring their pint… <button type="button" class="btn btn--small" data-intro-go>Ready!</button></p>
     </div>
   </div>
 
@@ -37,12 +41,17 @@ import { BRAND } from '../scripts/split-the-g/physics';
       <div data-end-medal></div>
       <p><span class="end-best" data-end-best></span></p>
       <div class="end-buttons">
-        <button type="button" class="btn" data-again>Another pint</button>
-        <button type="button" class="btn btn--ghost" data-change>Change drinker</button>
+        <button type="button" class="btn" data-again>Next pint 🎲</button>
       </div>
     </div>
   </div>
 </div>
+
+<section class="regulars" aria-labelledby="regulars-h">
+  <h2 id="regulars-h">Meet the regulars</h2>
+  <p>The pub picks who’s drinking each pint, at random (never the same one twice running). Everyone drinks differently, so get to know them.</p>
+  <ul class="lineup" data-lineup></ul>
+</section>
 
 <script>
   import { initSplitTheG } from '../scripts/split-the-g/game';
@@ -66,14 +75,12 @@ import { BRAND } from '../scripts/split-the-g/physics';
   }
   canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
   .stg[data-phase='drinking'] canvas { cursor: grabbing; }
-  .stg[data-phase='pick'] canvas, .stg[data-phase='result'] canvas { cursor: default; }
+  .stg[data-phase='result'] canvas { cursor: default; }
   .hud { position: absolute; inset: .7rem .7rem auto; display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; pointer-events: none; }
   .pill { background: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: .3rem .85rem; font: inherit; font-weight: 800; font-size: clamp(.85rem, 2vw, 1.05rem); box-shadow: 3px 3px 0 var(--ink); color: var(--ink); }
-  .pill--who { pointer-events: auto; cursor: pointer; display: inline-flex; gap: .45rem; align-items: center; max-width: 70%; text-align: left; }
-  .pill--who:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+  .pill--who { display: inline-flex; gap: .45rem; align-items: center; max-width: 70%; text-align: left; }
   .diff { font-size: .8em; letter-spacing: .05em; white-space: nowrap; }
   .pill--best { background: var(--sun); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .stg[data-phase='drinking'] .pill--who, .stg[data-phase='settling'] .pill--who { pointer-events: none; opacity: .85; }
 
   .bubble { position: absolute; transform: translate(-6%, -100%); max-width: min(300px, 46%); background: #fff; border: 3px solid var(--ink); border-radius: 18px; padding: .55rem .8rem; font-weight: 800; line-height: 1.3; font-size: clamp(.85rem, 1.9vw, 1.05rem); box-shadow: 3px 3px 0 var(--ink); pointer-events: none; animation: pop .25s ease-out; }
   .bubble::after { content: ''; position: absolute; left: 14px; bottom: -14px; width: 18px; height: 14px; background: #fff; border: 3px solid var(--ink); border-top: 0; border-right: 0; clip-path: polygon(0 0, 100% 0, 0 100%); transform: skewX(20deg); }
@@ -83,13 +90,29 @@ import { BRAND } from '../scripts/split-the-g/physics';
   .hint span { font-size: .85rem; opacity: .8; }
   @keyframes bob { 50% { transform: translate(-50%, -5px); } }
 
-  .pick { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(20,24,30,.45); padding: 3.4rem .8rem .8rem; overflow-y: auto; touch-action: pan-y; }
-  .pick-card { background: #fffaf0; border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: 6px 6px 0 var(--ink); padding: 1rem 1.1rem 1.1rem; width: min(860px, 100%); animation: pop .25s ease-out; }
-  .pick-card h2 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.7rem); }
-  .pick-sub { margin: .15rem 0 .8rem; opacity: .8; }
+  .intro { position: absolute; left: 0; right: 0; top: 3.6rem; display: flex; justify-content: center; padding: 0 .8rem; pointer-events: none; }
+  .intro-card { pointer-events: auto; display: grid; grid-template-columns: 96px 1fr; grid-template-areas: 'kick kick' 'face text' 'pour pour'; gap: .3rem .9rem; align-items: center; background: #fffaf0; border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: 6px 6px 0 var(--ink); padding: .8rem 1rem .9rem; width: min(520px, 100%); animation: slidein .35s cubic-bezier(.2,1.4,.4,1); }
+  .intro-kicker { grid-area: kick; margin: 0; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; font-size: .78rem; color: #c2410c; }
+  .intro-face { grid-area: face; width: 96px; height: 96px; border-radius: 14px; background: radial-gradient(circle at 50% 35%, #3b6b5a, #1d3b32); }
+  .intro-text { grid-area: text; }
+  .intro-text h2 { margin: 0; font-size: clamp(1.2rem, 2.6vw, 1.5rem); line-height: 1.15; }
+  .intro-tag { margin: .2rem 0 .3rem; font-size: .9rem; opacity: .85; line-height: 1.3; }
+  .intro-quirk { margin: 0; font-size: .85rem; font-weight: 700; line-height: 1.3; }
+  .intro-quirk :global(b) { color: #c2410c; }
+  .intro-pour { grid-area: pour; margin: .2rem 0 0; display: flex; justify-content: space-between; align-items: center; gap: .6rem; font-weight: 700; opacity: .9; }
+  .btn--small { font-size: .9rem; padding: .3rem .9rem; }
+  @keyframes slidein { from { transform: translateY(-14px) scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
+  @media (min-width: 701px) {
+    /* sits to the right of the glass, so the drinker's face stays in view */
+    .intro { justify-content: flex-end; padding: 0 1rem; }
+    .intro-card { width: min(300px, 30%); grid-template-columns: 1fr; grid-template-areas: 'kick' 'face' 'text' 'pour'; justify-items: start; }
+    .intro-pour { flex-wrap: wrap; width: 100%; }
+  }
+  .regulars { margin-top: 1.6rem; }
+  .regulars h2 { margin: 0 0 .2rem; }
+  .regulars > p { margin: 0 0 .8rem; opacity: .85; max-width: 70ch; }
   .lineup { list-style: none; margin: 0 0 .9rem; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .6rem; }
-  .lineup :global(button) { font: inherit; color: inherit; width: 100%; height: 100%; display: grid; grid-template-columns: 72px 1fr; gap: .2rem .7rem; align-items: center; text-align: left; background: #fff; border: 2px solid var(--ink); border-radius: 14px; padding: .45rem .6rem; cursor: pointer; box-shadow: 3px 3px 0 var(--ink); }
-  .lineup :global(button:hover), .lineup :global(button:focus-visible) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); background: #fff7d6; }
+  .lineup :global(li) { display: grid; grid-template-columns: 72px 1fr; gap: .2rem .7rem; align-items: center; text-align: left; background: #fff; border: 2px solid var(--ink); border-radius: 14px; padding: .45rem .6rem; box-shadow: 3px 3px 0 var(--ink); }
   .lineup :global(canvas) { width: 72px; height: 72px; grid-row: span 3; border-radius: 12px; background: radial-gradient(circle at 50% 35%, #3b6b5a, #1d3b32); touch-action: auto; }
   .lineup :global(strong) { font-size: 1rem; }
   .lineup :global(.tag) { font-size: .82rem; line-height: 1.3; opacity: .85; }
@@ -100,7 +123,6 @@ import { BRAND } from '../scripts/split-the-g/physics';
   .btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
   .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
   .btn--ghost { background: #fff; color: var(--ink); }
-  .btn--random { width: 100%; background: #2d5546; }
 
   .end { position: absolute; top: 0; bottom: 0; right: 0; width: 38%; display: grid; place-items: center; padding: 3.4rem 1rem 1rem; pointer-events: none; }
   .end-card { pointer-events: auto; background: #fff; border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: 6px 6px 0 var(--ink); padding: 1rem 1.2rem 1.2rem; text-align: center; width: 100%; max-width: 360px; animation: pop .25s ease-out; }
@@ -133,10 +155,14 @@ import { BRAND } from '../scripts/split-the-g/physics';
     .end-card :global(.medal-pop) { margin: 0 auto .3rem; }
     .bubble { max-width: 56%; font-size: .82rem; padding: .4rem .6rem; }
     .lineup { grid-template-columns: 1fr; gap: .45rem; }
-    .lineup :global(button) { grid-template-columns: 56px 1fr; padding: .35rem .5rem; }
+    .lineup :global(li) { grid-template-columns: 56px 1fr; padding: .35rem .5rem; }
     .lineup :global(canvas) { width: 56px; height: 56px; }
-    .lineup :global(.quirk) { display: none; }
-    .pick-card { padding: .8rem; }
+    .lineup :global(.quirk) { font-size: .74rem; }
+    .intro { top: 3.2rem; }
+    .intro-card { grid-template-columns: 64px 1fr; padding: .6rem .7rem .7rem; gap: .2rem .6rem; }
+    .intro-face { width: 64px; height: 64px; }
+    .intro-tag { font-size: .8rem; }
+    .intro-quirk { font-size: .78rem; }
     .hint { bottom: 2.5%; }
   }
   .is-hidden { display: none !important; }

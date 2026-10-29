@@ -32,7 +32,7 @@ export const apps: AppCard[] = [
   {
     slug: 'split-the-g',
     title: 'Split the G',
-    blurb: 'One pint, one gulp. Hold to drink, let go to stop, and leave the line right through the middle of the G. Inspired by the pub craze.',
+    blurb: 'One pint, one gulp. Hold to drink, let go to stop, and leave the line exactly halfway between the G’s bar and its curly tip. Inspired by the pub craze.',
     emoji: '🍺',
     icon: '/icons/split-the-g.svg',
     colour: '#e9c46a',

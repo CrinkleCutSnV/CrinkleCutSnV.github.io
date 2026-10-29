@@ -77,7 +77,7 @@ export const gameScores: GameScores[] = [
     icon: '/icons/split-the-g.svg',
     emoji: '🍺',
     colour: '#e9c46a',
-    headline: { key: SPLIT_BEST, label: 'Closest split (mm off the middle of the G)', format: { kind: 'mm' } },
+    headline: { key: SPLIT_BEST, label: 'Closest split (mm off the split line)', format: { kind: 'mm' } },
     medals: SPLIT_MEDALS,
     breakdown: {
       title: 'Closest with each drinker',

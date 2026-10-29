@@ -28,12 +28,33 @@ export function radiusAt(v: number) {
 export const areaAt = (v: number) => Math.PI * radiusAt(v) ** 2; // mm²
 
 // ---- the G on the glass ---------------------------------------------------------------
-export const G_MARK = {
-  bottom: 80,
-  top: 110,
-  /** the middle of the G, where its bar is: a perfect split leaves the line exactly here */
-  get target() { return (this.bottom + this.top) / 2; },
-};
+/**
+ * The G printed on the glass, in mm (v = height above the inside of the foot, u = across, centre 0).
+ * A thin, elegant G: an open ring from a curly terminal at the top right, anticlockwise over the
+ * top, down the left and round the bottom, up to a horizontal bar on the lower right.
+ * Both the artwork (scene.ts) and the scoring read these numbers, so they can't drift apart.
+ */
+export const G_MARK = Object.freeze((() => {
+  const cy = 92.6; // centre of the G's ring
+  const R = 15; // ring radius (centreline of the stroke)
+  const startAngle = (40 * Math.PI) / 180; // where the ring ends at the top right, above horizontal
+  const curlR = 2.7; // the curl tucks inside the ring at that end
+  const barDrop = 0.24; // bar sits this fraction of R below the centre: the G's bar is low
+  const barY = cy - barDrop * R;
+  const barEndAngle = -Math.asin(barDrop); // the ring comes up the right side to meet the bar
+  const curl = { u: (R - curlR) * Math.cos(startAngle), v: cy + (R - curlR) * Math.sin(startAngle) }; // centre of the curl
+  return {
+    cy, R, startAngle, curlR, barY, barEndAngle,
+    barFrom: R * Math.cos(barEndAngle), // bar runs from the ring...
+    barTo: R * 0.18, // ...in towards the middle
+    curl,
+    stroke: { thin: 0.55, thick: 1.5 }, // mm: hairline at top and bottom, thicker down the left
+    bottom: cy - R,
+    top: cy + R,
+    /** a perfect split: exactly halfway between the bar and the curly end at the top */
+    target: (barY + curl.v) / 2,
+  };
+})());
 export const TARGET = G_MARK.target;
 
 // ---- the drinkers ---------------------------------------------------------------------
@@ -296,7 +317,7 @@ export function simulate(p: Pint, release: (p: Pint) => boolean) {
 export interface Verdict {
   /** distance from a perfect split, mm, to 0.1 */
   mm: number;
-  /** + = line above the middle of the G (not enough drunk), − = below */
+  /** + = line above the split line (not enough drunk), − = below */
   signed: number;
   rating: string;
   remark: string;
@@ -310,9 +331,9 @@ export function judge(line: number, emptied = false, pick = Math.random): Verdic
   const any = (a: string[]) => a[Math.floor(pick() * a.length)];
   const { gold, silver, bronze } = SPLIT_MEDALS.thresholds;
   if (emptied) return { mm, signed, band: 'miss', rating: 'Not even close, pal', remark: 'That’s not splitting the G, that’s finishing the pint!' };
-  if (mm <= 0.3) return { mm, signed, band: 'perfect', rating: 'Split the G!', remark: any(['Bang through the middle. Absolute textbook.', 'Perfect. Somebody frame that pint.', 'Right through the bar of the G. Take a bow.']) };
-  if (mm <= gold) return { mm, signed, band: 'great', rating: 'Split the G!', remark: high ? 'A hair above the bar, but that’s a split in any pub.' : 'A whisker under the bar, but the G is well and truly split.' };
-  if (mm <= silver) return { mm, signed, band: 'good', rating: 'So close!', remark: high ? 'Just shy: the top of the G is still wearing its hat.' : 'A touch too far: you’ve nicked the G’s chin.' };
-  if (mm <= bronze) return { mm, signed, band: 'fair', rating: line <= G_MARK.top && line >= G_MARK.bottom ? 'On the G, at least' : 'Close, but no cigar', remark: high ? 'You’re hovering over the G. Be braver!' : 'Down at the bottom of the G. Ease off sooner.' };
+  if (mm <= 0.3) return { mm, signed, band: 'perfect', rating: 'Split the G!', remark: any(['Bang through the middle. Absolute textbook.', 'Perfect. Somebody frame that pint.', 'Smack between the bar and the curl. Take a bow.']) };
+  if (mm <= gold) return { mm, signed, band: 'great', rating: 'Split the G!', remark: high ? 'A hair high, but that’s a split in any pub.' : 'A whisker low, but the G is well and truly split.' };
+  if (mm <= silver) return { mm, signed, band: 'good', rating: 'So close!', remark: high ? 'Just shy: you’re creeping up towards the curl.' : 'A touch too far: you’re heading for the bar.' };
+  if (mm <= bronze) return { mm, signed, band: 'fair', rating: line <= G_MARK.curl.v && line >= G_MARK.barY ? 'Between the bar and the curl, at least' : line <= G_MARK.top && line >= G_MARK.bottom ? 'On the G, at least' : 'Close, but no cigar', remark: high ? 'Still up by the curl. Be braver!' : 'Down past the bar. Ease off sooner.' };
   return { mm, signed, band: 'miss', rating: 'Not even close, pal', remark: high ? 'Didn’t even trouble the G. That was a sip, not a gulp!' : 'You’ve drunk the G clean off the glass!' };
 }

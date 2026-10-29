@@ -83,7 +83,7 @@ check(reg.gold < 0.35 && reg.gold > 0.08, `a regular gets gold now and then (${(
 check(exp.gold < 0.6, `even an expert misses gold often (${(100 * exp.gold).toFixed(0)}%)`);
 
 // --- judging ---
-check(judge(TARGET).rating === 'Split the G!' && judge(TARGET + 0.9).rating === 'Split the G!', 'a line through the bar is a split');
+check(judge(TARGET).rating === 'Split the G!' && judge(TARGET + 0.9).rating === 'Split the G!', 'a line on the split line (halfway between bar and curl) is a split');
 check(judge(TARGET + 20).rating === 'Not even close, pal' && judge(TARGET - 20).rating === 'Not even close, pal', 'miles off: "Not even close, pal"');
 check(judge(G_MARK.top + 1).signed > 0, 'above the G reads as positive');
 const keep = pourPint(CHARACTERS[0], 5);
@@ -91,5 +91,22 @@ const end = simulate(keep, () => false);
 check(keep.emptied && judge(end, true).remark.includes('finishing the pint'), 'holding on forever finishes the pint and ends the go');
 check(Math.abs(visibleLine(keep) - end) < 1e-9, 'visible line = judged line');
 
+
+// --- the G and the split line: one fixed G, the same on every glass ---
+{
+  const g = G_MARK;
+  const half = (g.curl.v - g.barY) / 2;
+  console.log(`\nthe G: ring ${g.bottom.toFixed(1)}–${g.top.toFixed(1)} mm up the glass, bar at ${g.barY.toFixed(2)} mm, curl at ${g.curl.v.toFixed(2)} mm, split line at ${TARGET.toFixed(2)} mm (bar→curl ${(2 * half).toFixed(1)} mm)`);
+  check(Math.abs(TARGET - (g.barY + g.curl.v) / 2) < 1e-9, 'the split line is exactly halfway between the bar and the curl');
+  check(g.barY < g.cy && g.curl.v > g.cy, 'the bar is in the lower half of the G, the curl in the upper half');
+  check(Object.isFrozen(G_MARK), 'G_MARK is frozen: nothing can change the G at run time');
+  const glassOk = [g.bottom, g.barY, g.cy, g.curl.v, g.top].every((v) => g.R + g.stroke.thick < radiusAt(v));
+  check(glassOk, 'the whole G fits on the glass at every height it spans');
+  const seen = new Set<string>();
+  for (const c of CHARACTERS) for (let i = 0; i < 50; i++) { pourPint(c, i * 7919 + 3); seen.add(JSON.stringify(G_MARK) + TARGET); }
+  check(seen.size === 1, 'pouring 300 pints for all six drinkers never changes the G or the split line');
+  const { gold, silver, bronze } = SPLIT_MEDALS.thresholds;
+  check(gold < silver && silver < half && bronze > half, `gold (${gold}) and silver (${silver}) sit inside the bar→curl window (±${half.toFixed(2)} mm); bronze (${bronze}) reaches a little past it`);
+}
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : '\nall split checks passed');
 process.exit(failures ? 1 : 0);

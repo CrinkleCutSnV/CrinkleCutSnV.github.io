@@ -42,7 +42,7 @@ export const DISC_GOLF_MEDALS: MedalRule = {
 export const SPLIT_MEDALS: MedalRule = {
   game: 'split-the-g',
   key: 'crinklecut.splitTheG.medal',
-  measure: 'how close each pint comes to a perfect split (the line through the middle of the G)',
+  measure: 'how close each pint comes to a perfect split (halfway between the G’s bar and its curly tip)',
   better: 'lower',
   // mm from a perfect split, at or under
   thresholds: { bronze: 9, silver: 3.5, gold: 1 },
