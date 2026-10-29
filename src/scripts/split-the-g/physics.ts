@@ -70,7 +70,11 @@ export interface Look {
   extra?: 'tie' | 'hoops' | 'earrings' | 'bowtie' | 'cardigan' | 'flatcap';
 }
 
-export interface Quips { before: string[]; great: string[]; good: string[]; bad: string[] }
+export interface Quips {
+  before: string[]; great: string[]; good: string[]; bad: string[];
+  /** said with the empty glass upside down on their head (they drank the lot) */
+  hat: string[];
+}
 
 export interface Character {
   id: string;
@@ -101,6 +105,7 @@ export const CHARACTERS: Character[] = [
     look: { kind: 'human', skin: '#f5c9a8', shirt: '#7b5ea7', hair: '#cfd3da', style: 'bob', glasses: true, extra: 'cardigan' },
     quips: {
       before: ['Nice and steady. One-two, one-two…', 'Tempo, dear. Everything is tempo.', 'Shush now, I’m counting.'],
+      hat: ['And that, my dears, is what we call a full rest.', 'Every hymn deserves a big finish. This one’s mine.', 'Steady to the last drop. Does it go with the cardigan?'],
       great: ['And… rest. Perfectly in time.', 'Bravo. Encore? Maybe next week.'],
       good: ['Hm. Half a beat out.', 'Not bad. The altos would be proud.'],
       bad: ['Someone has moved the G. I’m sure of it.', 'Dreadful. I lost count.'],
@@ -116,6 +121,7 @@ export const CHARACTERS: Character[] = [
     look: { kind: 'human', skin: '#f2b896', shirt: '#2f8f5b', hair: '#c4552b', style: 'beard', extra: 'hoops' },
     quips: {
       before: ['Stand back, lads. I’m going in.', 'One gulp. How hard can it be?', 'Scrum down!'],
+      hat: ['Scrum cap, sorted.', 'Didn’t touch the sides. Fits like a glove, mind.', 'Who needs a split when you can have a helmet?'],
       great: ['TRY! Over the line, right on the G!', 'Ha! Soft hands, me.'],
       good: ['Ah, close enough for the front row.', 'Not bad for a big lad.'],
       bad: ['It went down a bit quick there…', 'Ah, I’ve no brakes, me.'],
@@ -131,6 +137,7 @@ export const CHARACTERS: Character[] = [
     look: { kind: 'human', skin: '#f7d2b6', shirt: '#dfe9f2', hair: '#6b4a2b', style: 'parting', glasses: true, extra: 'tie' },
     quips: {
       before: ['Oh gosh. Everyone’s watching, aren’t they?', 'Right. Okay. Okay. Right.', 'I’ve done a spreadsheet on this.'],
+      hat: ['I panicked. Now I’m a lampshade.', 'Is this… is this the done thing? It feels like the done thing.', 'This was not in the spreadsheet.'],
       great: ['I… I did it? I did it!', 'Within tolerance! Lovely.'],
       good: ['That’s a rounding error, surely.', 'Close. I’ll be thinking about it all week.'],
       bad: ['Oh no. Oh no no no.', 'Can we pretend that didn’t happen?'],
@@ -146,6 +153,7 @@ export const CHARACTERS: Character[] = [
     look: { kind: 'human', skin: '#e9b48f', shirt: '#ef6f8e', hair: '#b5432f', style: 'curls', extra: 'earrings' },
     quips: {
       before: ['Just a little sip, love…', 'Oh go on then. For the craic.', 'Watch your Auntie Dot, now.'],
+      hat: ['Ooh, a fascinator! Very Ascot.', 'Squashes the curls, but you can’t have everything.', 'I’ll wear it to the next wedding, so I will.'],
       great: ['Ooh! Look at that! Somebody take a picture!', 'Still got it, darling.'],
       good: ['Ooh, nearly! I got a bit carried away.', 'Close! Don’t tell your uncle.'],
       bad: ['Oops! Got into the swing of it there.', 'Well, that went quick, didn’t it?'],
@@ -161,6 +169,7 @@ export const CHARACTERS: Character[] = [
     look: { kind: 'walrus', skin: '#a88466', shirt: '#22406e', hair: '#e8dcc6', style: 'walrus', extra: 'flatcap' },
     quips: {
       before: ['Mind the moustache. Here we go.', 'Steady as she goes…', 'Ahoy. Fetch me that G.'],
+      hat: ['Captain’s hat, mark two. Shipshape!', 'Glass overboard! Oh no, it’s on me head.', 'Empty hold, fine hat. Steady as she goes.'],
       great: ['Ha-harr! Dead on the G!', 'Smooth seas, me hearties.'],
       good: ['A fair wind, but a touch off course.', 'Close. The tide turned on me.'],
       bad: ['Man overboard!', 'The moustache drank more than I did.'],
@@ -176,6 +185,7 @@ export const CHARACTERS: Character[] = [
     look: { kind: 'human', skin: '#f3c7a5', shirt: '#9c7b4f', hair: '#e6e6e6', style: 'bald', glasses: true, extra: 'bowtie' },
     quips: {
       before: ['Fascinating. The foam is a non-Newtonian marvel.', 'By my calculations, a bold opening swig.', 'Observe: science.'],
+      hat: ['For science, I’ve drunk the control sample.', 'A pint has a fixed volume. A hat, it turns out, does not.', 'Peer review pending, but I believe this suits me.'],
       great: ['Quod erat demonstrandum.', 'Exactly as the model predicted.'],
       good: ['Within experimental error. Broadly.', 'A promising result. Needs more data.'],
       bad: ['The model requires… adjustments.', 'Clearly the glass is non-standard.'],
@@ -334,7 +344,7 @@ export function judge(line: number, emptied = false, pick = Math.random): Verdic
   const high = signed > 0;
   const any = (a: string[]) => a[Math.floor(pick() * a.length)];
   const { gold, silver, bronze } = SPLIT_MEDALS.thresholds;
-  if (emptied) return { mm, signed, band: 'miss', rating: 'Not even close, pal', remark: 'That’s not splitting the G, that’s finishing the pint!' };
+  if (emptied) return { mm, signed, band: 'miss', rating: 'Glass hat!', remark: 'That’s not splitting the G, that’s finishing the pint! No medal, but what a hat.' };
   if (mm <= 0.3) return { mm, signed, band: 'perfect', rating: 'Split the G!', remark: any(['Bang through the middle. Absolute textbook.', 'Perfect. Somebody frame that pint.', 'Smack between the bar and the curl. Take a bow.']) };
   if (mm <= gold) return { mm, signed, band: 'great', rating: 'Split the G!', remark: high ? 'A hair high, but that’s a split in any pub.' : 'A whisker low, but the G is well and truly split.' };
   if (mm <= silver) return { mm, signed, band: 'good', rating: 'So close!', remark: high ? 'Just shy: you’re creeping up towards the curl.' : 'A touch too far: you’re heading for the bar.' };

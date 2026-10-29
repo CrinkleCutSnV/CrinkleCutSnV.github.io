@@ -710,3 +710,64 @@ export function drawGlug(ctx: Ctx, x: number, y: number, t: number, R: number) {
   }
   ctx.restore();
 }
+
+// ---- the glass hat (for anyone who drinks the lot) ----------------------------------------
+export interface HatFit {
+  /** how far above the middle of the head the upturned rim rests, × head radius */
+  crown: number;
+  /** a jaunty tilt, radians */
+  tilt: number;
+  /** a sideways nudge, × head radius */
+  dx: number;
+}
+/** Where an upside-down pint sits on each drinker's head art. */
+export const HAT_FIT: Record<string, HatFit> = {
+  maureen: { crown: 0.74, tilt: -0.07, dx: -0.02 }, // perched on top of the bob
+  declan: { crown: 0.6, tilt: 0.09, dx: 0.03 }, // jammed on like a scrum cap
+  nigel: { crown: 0.64, tilt: 0.15, dx: 0.05 }, // a bit wonky, naturally
+  dot: { crown: 0.88, tilt: -0.11, dx: -0.04 }, // riding high on the curls
+  walter: { crown: 0.98, tilt: 0.06, dx: 0.06 }, // balanced on top of the flat cap
+  pip: { crown: 0.52, tilt: 0, dx: 0 }, // straight down on the dome
+};
+export const hatFit = (c: Character): HatFit => HAT_FIT[c.id] ?? { crown: 0.7, tilt: 0, dx: 0 };
+
+/** The last of the head sliding out of an upturned glass: foam round the rim and a few drips down the drinker. */
+export function drawHatFoam(ctx: Ctx, gv: GlassView, R: number, t: number) {
+  if (t < 0) return;
+  const rim = GLASS.base + GLASS.height;
+  const r = radiusAt(GLASS.height);
+  const clamp = (x: number) => Math.max(0, Math.min(1, x));
+  ctx.save();
+  ctx.fillStyle = '#fff4da';
+  ctx.strokeStyle = 'rgba(160,120,70,.65)';
+  ctx.lineWidth = Math.max(1.2, R * 0.03);
+  // drips run straight down (gravity), from points on the rim
+  for (const [u, delay, len] of [[-0.86, 0, 0.36], [0.84, 0.14, 0.62], [-0.3, 0.35, 0.14]]) {
+    const d = clamp((t - delay) / 0.9);
+    if (d <= 0) continue;
+    const p = glassToScreen(gv, u * r, rim);
+    const L = len * R * (1 - (1 - d) ** 2);
+    const wdt = R * 0.065;
+    ctx.beginPath();
+    ctx.moveTo(p.x - wdt, p.y);
+    ctx.lineTo(p.x - wdt * 0.55, p.y + L);
+    ctx.arc(p.x, p.y + L, wdt * 0.85, Math.PI, 0, true);
+    ctx.lineTo(p.x + wdt, p.y);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // now and then a drop lets go of the longest drip
+    if (len > 0.6 && d >= 1) {
+      const f = ((t - delay - 0.9) % 1.4) / 1.4;
+      ctx.globalAlpha = 1 - f;
+      ctx.beginPath(); ctx.arc(p.x, p.y + L + R * (0.15 + f * f * 1.1), wdt * 0.6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+  // a creamy ring of foam round the rim
+  for (let i = 0; i <= 8; i++) {
+    const u = -r + (2 * r * i) / 8;
+    const p = glassToScreen(gv, u, rim - 2);
+    ctx.beginPath(); ctx.arc(p.x, p.y, R * (0.05 + 0.02 * ((i * 7) % 3)), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
