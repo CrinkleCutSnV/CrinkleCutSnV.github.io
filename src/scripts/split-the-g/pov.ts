@@ -189,6 +189,23 @@ function glass(ctx: Ctx, L: Layout, p: Pint, top: number) {
     }
     ctx.stroke();
   }
+  if (p.emptied && top < 3) {
+    // drained: clear glass all the way down, the bar showing through the bottom, and a few wisps of foam
+    loop(ctx, surf);
+    ctx.fillStyle = 'rgba(150,170,160,.55)'; ctx.fill();
+    const c0 = L.P([0, 0, top]);
+    ctx.fillStyle = 'rgba(250,240,218,.8)';
+    const hsh = (n: number) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+    for (let i = 0; i < 26; i++) {
+      const rad = 0.55 + 0.42 * hsh(i), a = hsh(i + 99) * Math.PI * 2;
+      const q = L.P([Math.cos(a) * radiusAt(top) * rad, Math.sin(a) * radiusAt(top) * rad, top]);
+      ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(1, q.s * (1 + (i % 3) * 0.8)), 0, Math.PI * 2); ctx.fill();
+    }
+    void c0;
+    ctx.restore();
+    rimAndGlint(ctx, L, rimIn, rimOut);
+    return;
+  }
   // the top of the head: a level, creamy surface where it meets the wall
   loop(ctx, surf);
   const c0 = L.P([0, 0, top]);
@@ -211,6 +228,11 @@ function glass(ctx: Ctx, L: Layout, p: Pint, top: number) {
   ctx.strokeStyle = '#2a1209'; ctx.lineWidth = Math.max(2, deep.s * 2.2); ctx.stroke();
   ctx.strokeStyle = 'rgba(140,90,45,.8)'; ctx.lineWidth = Math.max(1, deep.s * 0.7); ctx.stroke();
   ctx.restore();
+  rimAndGlint(ctx, L, rimIn, rimOut);
+  void HEAD_MM;
+}
+
+function rimAndGlint(ctx: Ctx, L: Layout, rimIn: { x: number; y: number }[], rimOut: { x: number; y: number }[]) {
   // the rim, right in front of you
   ctx.beginPath();
   rimOut.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath();
@@ -222,7 +244,6 @@ function glass(ctx: Ctx, L: Layout, p: Pint, top: number) {
   ctx.beginPath();
   for (let a = -Math.PI * 0.8; a <= -Math.PI * 0.6; a += 0.05) { const q = L.wall(a, TOP, LIP * 0.5); ctx.lineTo(q.x, q.y); }
   ctx.lineWidth = Math.max(3, L.wall(-Math.PI / 2, TOP).s * 1.2); ctx.stroke();
-  void HEAD_MM;
 }
 
 // ---- your hand round the glass, coming in from the bottom right ----

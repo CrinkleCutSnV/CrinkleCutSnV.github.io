@@ -146,7 +146,9 @@ export function drawGlass(ctx: Ctx, gv: GlassView, pint: Pint | null, look: Pint
 
   if (pint && !look.empty) {
     const line = visibleLine(pint);
-    const head = Math.max(4, headNow(pint));
+    // a drained glass keeps only its wisp of foam (no minimum head, no stout)
+    const head = pint.emptied ? Math.max(0, headNow(pint)) : Math.max(4, headNow(pint));
+    const dry = pint.emptied && line < 0.5;
     ctx.save();
     innerPath(ctx, s);
     ctx.clip();
@@ -175,8 +177,8 @@ export function drawGlass(ctx: Ctx, gv: GlassView, pint: Pint | null, look: Pint
     beer.addColorStop(0.5, '#3a190c');
     beer.addColorStop(1, '#0d0504');
     ctx.fillStyle = beer;
-    ctx.fillRect(-W, 0, 2 * W, W);
-    if (settled < 1) {
+    if (!dry) ctx.fillRect(-W, 0, 2 * W, W);
+    if (settled < 1 && !dry) {
       // still surging: a creamy tan cloud that clears from the bottom up
       const front = (GLASS.base + line) * settled; // mm above the bottom that has cleared
       const depth = GLASS.base + line - front;
@@ -198,8 +200,8 @@ export function drawGlass(ctx: Ctx, gv: GlassView, pint: Pint | null, look: Pint
     const hd = ctx.createLinearGradient(0, -head * s, 0, 0);
     hd.addColorStop(0, '#fff6e0');
     hd.addColorStop(0.7, '#f3e2bf');
-    hd.addColorStop(0.93, '#d9b98a');
-    hd.addColorStop(1, '#a0703f');
+    hd.addColorStop(0.93, dry ? '#efdcb6' : '#d9b98a');
+    hd.addColorStop(1, dry ? '#e6cfa3' : '#a0703f');
     ctx.fillStyle = hd;
     ctx.fillRect(-W, -head * s, 2 * W, head * s + 0.6);
     ctx.fillStyle = 'rgba(255,255,255,.55)';

@@ -215,6 +215,8 @@ export interface Pint {
   q: number; // flow multiplier
   lag: number; // s
   settleRise: number; // mm the line creeps back up as the head drains
+  /** mm of head gone once you've had the lot (it leaves just a wisp) */
+  drained: number;
   phases: [number, number]; // for the wobbly drinker
   sips: number[]; // for the stuttering drinker: alternating gulp/pause lengths (s)
   gulps: number[]; // …and how big each gulp is (the odd panicky big one)
@@ -250,7 +252,7 @@ export function pourPint(char: Character, seed: number): Pint {
     phases: [r() * Math.PI * 2, r() * Math.PI * 2],
     sips, gulps,
     start, head,
-    phase: 'ready', t: 0, flow: 0, line: start, settleT: 0, lacing: start + head, emptied: false,
+    phase: 'ready', t: 0, flow: 0, line: start, settleT: 0, lacing: start + head, emptied: false, drained: 0,
   };
 }
 
@@ -281,13 +283,16 @@ export function paceAt(p: Pint, t: number): number {
 
 const RAMP = 0.12; // s to get the glass tipped and the stout flowing
 const EMPTY_AT = 14; // mm: you've had the lot
+/** mm of foam left in the bottom of a drained glass: just a wisp */
+export const WISP = 1.2;
+const SLURP = 70; // mm/s: the last of the stout and the head going down once you've had the lot
 const SETTLE_TIME = 0.45; // s, time constant of the head draining back
 export const SETTLE_DONE = 1.7; // s after the flow stops before the ref calls it
 
 /** The line you'd see now, settling included. */
 export const visibleLine = (p: Pint) => p.line + p.settleRise * (1 - Math.exp(-p.settleT / SETTLE_TIME));
 /** Head thickness now (it shrinks by what it gives back to the beer). */
-export const headNow = (p: Pint) => p.head - (visibleLine(p) - p.line) * 0.8;
+export const headNow = (p: Pint) => p.head - (visibleLine(p) - p.line) * 0.8 - p.drained;
 
 export function startDrinking(p: Pint) { if (p.phase === 'ready') p.phase = 'drinking'; }
 export function stopDrinking(p: Pint) { if (p.phase === 'drinking') p.phase = 'stopping'; }
@@ -302,12 +307,18 @@ export function step(p: Pint, dt = FIXED_DT) {
     if (p.flow < 0.4) { p.flow = 0; p.phase = 'settling'; }
   } else if (p.phase === 'settling') {
     p.settleT += dt;
+    if (p.emptied) {
+      // you've had the lot: the dregs and the head go too, leaving lacing and a wisp of foam
+      p.line = Math.max(0, p.line - SLURP * dt);
+      p.drained = Math.min(p.head - WISP, p.drained + SLURP * dt);
+      p.lacing = Math.min(p.lacing, p.line + headNow(p));
+    }
     if (p.settleT >= SETTLE_DONE) p.phase = 'done';
   }
   if (p.flow > 0) {
     p.line -= (p.flow * 1000 * dt) / areaAt(p.line);
     p.lacing = Math.min(p.lacing, p.line + p.head);
-    if (p.line <= EMPTY_AT) { p.line = EMPTY_AT; p.flow = 0; p.emptied = true; p.phase = 'settling'; }
+    if (p.line <= EMPTY_AT) { p.line = EMPTY_AT; p.flow = 0; p.emptied = true; p.settleRise = 0; p.phase = 'settling'; }
   }
 }
 

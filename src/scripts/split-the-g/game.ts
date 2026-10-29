@@ -1,5 +1,5 @@
 import {
-  BEST_KEY, CHARACTERS, FIXED_DT, bestKeyFor, GLASS, G_MARK, TARGET, characterById, judge, pourPint, predictFinal, radiusAt, startDrinking, step, stopDrinking, visibleLine,
+  BEST_KEY, CHARACTERS, FIXED_DT, bestKeyFor, GLASS, G_MARK, TARGET, characterById, headNow, judge, pourPint, predictFinal, radiusAt, startDrinking, step, stopDrinking, visibleLine,
   type Character, type Expression, type Pint, type Verdict,
 } from './physics';
 import { drawPov } from './pov';
@@ -438,7 +438,7 @@ export function initSplitTheG(root: HTMLElement) {
       const y = (v: number) => glassToScreen(gv, 0, GLASS.base + v).y;
       const line = pint ? visibleLine(pint) : null;
       const geo = { s, glassX: gv.x, glassY: gv.y, angle: gv.angle, gLeft: gv.x - G_MARK.R * s, gRight: gv.x + G_MARK.R * s, gTop: y(G_MARK.top), gBottom: y(G_MARK.bottom), bar: y(G_MARK.barY), curl: y(G_MARK.curl.v), target: y(TARGET), line: line === null ? null : y(line), rimTop: y(GLASS.height + 4), foot: gv.y };
-      return { phase, char: char.id, line, target: TARGET, g: { ...G_MARK }, geo, verdict, k, pov, pintPhase: pint?.phase, emptied: pint?.emptied, hat: hatT >= 0 ? { t: hatT, line: hatLine, landed: hatT >= HAT_LAND } : null };
+      return { phase, char: char.id, line, target: TARGET, g: { ...G_MARK }, geo, verdict, k, pov, pintPhase: pint?.phase, emptied: pint?.emptied, head: pint ? headNow(pint) : null, hat: hatT >= 0 ? { t: hatT, line: hatLine, landed: hatT >= HAT_LAND } : null };
     },
   };
 
