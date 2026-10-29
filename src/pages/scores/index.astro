@@ -58,8 +58,8 @@ const withMedals = gameScores.filter((g) => g.medals);
                     <li data-stat={s.key} data-format={JSON.stringify(s.format)} data-role="row">
                       {s.badge && <span class="badge" aria-hidden="true">{s.badge}</span>}
                       <span class="name">
-                        <strong>{s.badge ? `Hole ${s.badge}: ` : ''}{s.label}</strong>
-                        <small>{s.format.kind === 'strokes' ? `Par ${s.format.par}` : ''}<span class="date" data-date></span></small>
+                        <strong>{s.prefix ?? ''}{s.label}</strong>
+                        <small>{s.format.kind === 'strokes' ? `Par ${s.format.par}` : s.note ?? ''}<span class="date" data-date></span></small>
                       </span>
                       <span class="val"><span data-value>–</span><small data-extra></small></span>
                     </li>
@@ -145,6 +145,10 @@ const withMedals = gameScores.filter((g) => g.medals);
         if (v === null) {
           value.textContent = headline ? (fmt.kind === 'strokes' ? 'No full round yet' : '–') : 'Not played yet';
           if (extra) extra.textContent = '';
+        } else if (fmt.kind === 'mm') {
+          value.textContent = `${v.toFixed(1)} mm`;
+          if (extra) extra.textContent = headline ? (v === 0 ? 'Perfect split!' : v <= 1 ? 'Split the G!' : '') : '';
+          if (!headline) el.dataset.vs = v <= 1 ? '-1' : '0';
         } else if (fmt.kind === 'metres') {
           value.textContent = `${v.toFixed(fmt.decimals ?? 1)} m`;
           if (extra) extra.textContent = '';

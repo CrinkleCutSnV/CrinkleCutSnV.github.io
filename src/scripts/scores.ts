@@ -6,8 +6,11 @@ export const DATE_SUFFIX = '.at';
 
 export function readNumber(key: string): number | null {
   try {
-    const v = Number(localStorage.getItem(key));
-    return Number.isFinite(v) && v > 0 ? v : null;
+    const s = localStorage.getItem(key);
+    if (s === null || s === '') return null;
+    const v = Number(s);
+    // 0 is a real score for "lower is better" games (a perfect split is 0.0 mm)
+    return Number.isFinite(v) && v >= 0 ? v : null;
   } catch { return null; }
 }
 

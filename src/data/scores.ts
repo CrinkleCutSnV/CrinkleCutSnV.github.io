@@ -4,19 +4,26 @@
 // 2. add an entry below with the same key. The page, the empty state and "Reset scores"
 //    all pick it up automatically.
 import { HOLES } from '../scripts/disc-golf/physics';
-import { DISC_GOLF_MEDALS, PLANE_MEDALS, type MedalRule } from './medals';
+import { BEST_KEY as SPLIT_BEST, CHARACTERS, bestKeyFor } from '../scripts/split-the-g/physics';
+import { DISC_GOLF_MEDALS, PLANE_MEDALS, SPLIT_MEDALS, type MedalRule } from './medals';
 
 export type ScoreFormat =
   | { kind: 'metres'; decimals?: number }
   /** golf-style: fewer is better, shown with the par */
-  | { kind: 'strokes'; par: number; scoreName?: boolean };
+  | { kind: 'strokes'; par: number; scoreName?: boolean }
+  /** millimetres off a target: lower is better, 0 is perfect */
+  | { kind: 'mm' };
 
 export interface ScoreStat {
   key: string; // localStorage key
   label: string;
   format: ScoreFormat;
-  /** optional small number badge (e.g. a hole number) */
+  /** optional small badge (e.g. a hole number) */
   badge?: string;
+  /** shown before the label, e.g. "Hole 1: " */
+  prefix?: string;
+  /** small print under the label */
+  note?: string;
 }
 
 export interface GameScores {
@@ -59,8 +66,22 @@ export const gameScores: GameScores[] = [
         key: `crinklecut.discGolf.best.${i}`,
         label: h.name,
         badge: String(i + 1),
+        prefix: `Hole ${i + 1}: `,
         format: { kind: 'strokes', par: h.par, scoreName: true },
       })),
+    },
+  },
+  {
+    slug: 'split-the-g',
+    title: 'Split the G',
+    icon: '/icons/split-the-g.svg',
+    emoji: '🍺',
+    colour: '#e9c46a',
+    headline: { key: SPLIT_BEST, label: 'Closest split (mm off the middle of the G)', format: { kind: 'mm' } },
+    medals: SPLIT_MEDALS,
+    breakdown: {
+      title: 'Closest with each drinker',
+      stats: CHARACTERS.map((c) => ({ key: bestKeyFor(c.id), label: c.name, badge: c.name.replace(/[^A-Za-z]/g, '').charAt(0), format: { kind: 'mm' } as ScoreFormat, note: `Trickiness ${c.difficulty} of 4` })),
     },
   },
 ];

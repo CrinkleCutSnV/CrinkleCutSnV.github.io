@@ -28,6 +28,15 @@ export const apps: AppCard[] = [
     icon: '/icons/disc-golf.svg',
     colour: '#7bd389',
     tags: ['Game', 'Physics', 'Canvas'],
+  },
+  {
+    slug: 'split-the-g',
+    title: 'Split the G',
+    blurb: 'One pint, one gulp. Hold to drink, let go to stop, and leave the line right through the middle of the G. Inspired by the pub craze.',
+    emoji: '🍺',
+    icon: '/icons/split-the-g.svg',
+    colour: '#e9c46a',
+    tags: ['Game', 'Timing', 'Canvas'],
     status: 'new',
   },
 ];

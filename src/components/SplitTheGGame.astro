@@ -1,0 +1,143 @@
+---
+// Split the G. All logic lives in src/scripts/split-the-g/.
+import { BRAND } from '../scripts/split-the-g/physics';
+---
+<div class="stg" data-split-the-g data-phase="pick">
+  <canvas aria-label={`Split the G. A pint of ${BRAND} on the bar. Press and hold to drink, let go to stop.`}></canvas>
+
+  <div class="hud">
+    <button type="button" class="pill pill--who" data-who title="Change drinker">
+      <span data-who-name>Pick a drinker</span><span class="diff" data-who-diff></span>
+    </button>
+    <div class="pill pill--best" data-best>Best: –</div>
+  </div>
+
+  <div class="bubble is-hidden" data-bubble aria-live="polite"></div>
+
+  <div class="hint is-hidden" data-hint>
+    <strong data-hint-main>Press and hold to drink</strong>
+    <span data-hint-sub>Let go to stop. One gulp per pint!</span>
+  </div>
+
+  <div class="pick" data-pick role="dialog" aria-label="Choose your drinker">
+    <div class="pick-card">
+      <h2>Who’s splitting the G?</h2>
+      <p class="pick-sub">Everyone drinks differently. Pick a regular, or let the pub decide.</p>
+      <ul class="lineup" data-lineup></ul>
+      <button type="button" class="btn btn--random" data-random>🎲 Surprise me (new drinker every pint)</button>
+    </div>
+  </div>
+
+  <div class="end is-hidden" data-end role="dialog" aria-live="polite" aria-label="Result">
+    <div class="end-card">
+      <p class="end-rating" data-end-rating></p>
+      <p class="end-mm" data-end-mm></p>
+      <p class="end-where" data-end-where></p>
+      <p class="end-remark" data-end-remark></p>
+      <div data-end-medal></div>
+      <p><span class="end-best" data-end-best></span></p>
+      <div class="end-buttons">
+        <button type="button" class="btn" data-again>Another pint</button>
+        <button type="button" class="btn btn--ghost" data-change>Change drinker</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { initSplitTheG } from '../scripts/split-the-g/game';
+  document.querySelectorAll<HTMLElement>('[data-split-the-g]').forEach((el) => initSplitTheG(el));
+</script>
+
+<style>
+  .stg {
+    position: relative;
+    width: 100%;
+    height: clamp(520px, min(80vh, 70vw), 780px);
+    border: 3px solid var(--ink);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 6px 6px 0 var(--ink);
+    background: #1d3b32;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
+  .stg[data-phase='drinking'] canvas { cursor: grabbing; }
+  .stg[data-phase='pick'] canvas, .stg[data-phase='result'] canvas { cursor: default; }
+  .hud { position: absolute; inset: .7rem .7rem auto; display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; pointer-events: none; }
+  .pill { background: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: .3rem .85rem; font: inherit; font-weight: 800; font-size: clamp(.85rem, 2vw, 1.05rem); box-shadow: 3px 3px 0 var(--ink); color: var(--ink); }
+  .pill--who { pointer-events: auto; cursor: pointer; display: inline-flex; gap: .45rem; align-items: center; max-width: 70%; text-align: left; }
+  .pill--who:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+  .diff { font-size: .8em; letter-spacing: .05em; white-space: nowrap; }
+  .pill--best { background: var(--sun); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stg[data-phase='drinking'] .pill--who, .stg[data-phase='settling'] .pill--who { pointer-events: none; opacity: .85; }
+
+  .bubble { position: absolute; transform: translate(-6%, -100%); max-width: min(300px, 46%); background: #fff; border: 3px solid var(--ink); border-radius: 18px; padding: .55rem .8rem; font-weight: 800; line-height: 1.3; font-size: clamp(.85rem, 1.9vw, 1.05rem); box-shadow: 3px 3px 0 var(--ink); pointer-events: none; animation: pop .25s ease-out; }
+  .bubble::after { content: ''; position: absolute; left: 14px; bottom: -14px; width: 18px; height: 14px; background: #fff; border: 3px solid var(--ink); border-top: 0; border-right: 0; clip-path: polygon(0 0, 100% 0, 0 100%); transform: skewX(20deg); }
+
+  .hint { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); background: rgba(255,255,255,.95); border: 2px solid var(--ink); border-radius: 14px; padding: .55rem .95rem; text-align: center; pointer-events: none; display: grid; gap: .15rem; box-shadow: 3px 3px 0 var(--ink); animation: bob 2.2s ease-in-out infinite; white-space: nowrap; }
+  .hint strong { font-size: 1.05rem; }
+  .hint span { font-size: .85rem; opacity: .8; }
+  @keyframes bob { 50% { transform: translate(-50%, -5px); } }
+
+  .pick { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(20,24,30,.45); padding: 3.4rem .8rem .8rem; overflow-y: auto; touch-action: pan-y; }
+  .pick-card { background: #fffaf0; border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: 6px 6px 0 var(--ink); padding: 1rem 1.1rem 1.1rem; width: min(860px, 100%); animation: pop .25s ease-out; }
+  .pick-card h2 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.7rem); }
+  .pick-sub { margin: .15rem 0 .8rem; opacity: .8; }
+  .lineup { list-style: none; margin: 0 0 .9rem; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .6rem; }
+  .lineup :global(button) { font: inherit; color: inherit; width: 100%; height: 100%; display: grid; grid-template-columns: 72px 1fr; gap: .2rem .7rem; align-items: center; text-align: left; background: #fff; border: 2px solid var(--ink); border-radius: 14px; padding: .45rem .6rem; cursor: pointer; box-shadow: 3px 3px 0 var(--ink); }
+  .lineup :global(button:hover), .lineup :global(button:focus-visible) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); background: #fff7d6; }
+  .lineup :global(canvas) { width: 72px; height: 72px; grid-row: span 3; border-radius: 12px; background: radial-gradient(circle at 50% 35%, #3b6b5a, #1d3b32); touch-action: auto; }
+  .lineup :global(strong) { font-size: 1rem; }
+  .lineup :global(.tag) { font-size: .82rem; line-height: 1.3; opacity: .85; }
+  .lineup :global(.quirk) { font-size: .78rem; font-weight: 700; line-height: 1.3; grid-column: 2; }
+  .lineup :global(.diffdots) { white-space: nowrap; letter-spacing: .05em; color: var(--ink); }
+  .lineup :global(.quirk b) { color: #c2410c; }
+  .btn { font: inherit; font-weight: 800; font-size: 1rem; background: var(--accent); color: #fff; border: 3px solid var(--ink); border-radius: 999px; padding: .5rem 1.2rem; box-shadow: 3px 3px 0 var(--ink); cursor: pointer; }
+  .btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  .btn--ghost { background: #fff; color: var(--ink); }
+  .btn--random { width: 100%; background: #2d5546; }
+
+  .end { position: absolute; top: 0; bottom: 0; right: 0; width: 38%; display: grid; place-items: center; padding: 3.4rem 1rem 1rem; pointer-events: none; }
+  .end-card { pointer-events: auto; background: #fff; border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: 6px 6px 0 var(--ink); padding: 1rem 1.2rem 1.2rem; text-align: center; width: 100%; max-width: 360px; animation: pop .25s ease-out; }
+  @keyframes pop { from { transform: scale(.85) rotate(-3deg); opacity: 0; } }
+  .end-card p { margin: 0; }
+  .end-rating { font-size: clamp(1.4rem, 3.4vw, 2rem); font-weight: 900; line-height: 1.1; }
+  .end-card[data-band='perfect'] .end-rating, .end-card[data-band='great'] .end-rating { color: #1f8a4c; }
+  .end-card[data-band='miss'] .end-rating { color: #c0392b; }
+  .end-mm { font-size: clamp(2.2rem, 6vw, 3.2rem); font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .end-where { font-weight: 800; font-size: .9rem; opacity: .7; }
+  .end-remark { margin: .4rem 0 .6rem !important; line-height: 1.35; }
+  .end-best { display: inline-block; font-weight: 800; margin-bottom: .8rem; padding: .1rem .7rem; border: 2px solid transparent; }
+  .end-best.is-new { background: var(--sun); border: 2px solid var(--ink); border-radius: 999px; transform: rotate(-3deg); }
+  .end-buttons { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; }
+
+  @media (max-width: 700px) {
+    .stg { height: clamp(560px, 82svh, 760px); }
+    .end { width: auto; left: 0; top: auto; padding: .5rem; }
+    .end-card { max-width: none; padding: .6rem .8rem .75rem; display: grid; grid-template-columns: auto 1fr; gap: 0 .7rem; text-align: left; align-items: center; }
+    .end-rating { grid-column: 1 / -1; font-size: 1.3rem; text-align: center; }
+    .end-mm { font-size: 1.9rem; grid-row: span 2; }
+    .end-where { font-size: .8rem; }
+    .end-remark { font-size: .82rem; margin: 0 !important; }
+    .end-card > div[data-end-medal], .end-card > p:has(.end-best), .end-buttons { grid-column: 1 / -1; }
+    .end-card > div[data-end-medal] { margin-top: .4rem; }
+    .end-best { margin-bottom: .4rem; font-size: .85rem; }
+    .end-card > p:has(.end-best) { text-align: center; }
+    .end-buttons { flex-wrap: nowrap; gap: .4rem; }
+    .end-buttons .btn { font-size: .84rem; padding: .38rem .75rem; white-space: nowrap; }
+    .end-card :global(.medal-pop) { margin: 0 auto .3rem; }
+    .bubble { max-width: 56%; font-size: .82rem; padding: .4rem .6rem; }
+    .lineup { grid-template-columns: 1fr; gap: .45rem; }
+    .lineup :global(button) { grid-template-columns: 56px 1fr; padding: .35rem .5rem; }
+    .lineup :global(canvas) { width: 56px; height: 56px; }
+    .lineup :global(.quirk) { display: none; }
+    .pick-card { padding: .8rem; }
+    .hint { bottom: 2.5%; }
+  }
+  .is-hidden { display: none !important; }
+</style>

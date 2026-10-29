@@ -17,7 +17,7 @@ export interface MedalRule {
   better: 'higher' | 'lower';
   /** the value needed for each medal */
   thresholds: Record<Tier, number>;
-  unit: 'm' | 'vsPar';
+  unit: 'm' | 'vsPar' | 'mm';
 }
 
 export const PLANE_MEDALS: MedalRule = {
@@ -39,14 +39,25 @@ export const DISC_GOLF_MEDALS: MedalRule = {
   unit: 'vsPar',
 };
 
-export const MEDAL_RULES: MedalRule[] = [PLANE_MEDALS, DISC_GOLF_MEDALS];
+export const SPLIT_MEDALS: MedalRule = {
+  game: 'split-the-g',
+  key: 'crinklecut.splitTheG.medal',
+  measure: 'how close each pint comes to a perfect split (the line through the middle of the G)',
+  better: 'lower',
+  // mm from a perfect split, at or under
+  thresholds: { bronze: 9, silver: 3.5, gold: 1 },
+  unit: 'mm',
+};
+
+export const MEDAL_RULES: MedalRule[] = [PLANE_MEDALS, DISC_GOLF_MEDALS, SPLIT_MEDALS];
 
 // ---- formatting --------------------------------------------------------------------
 export const fmtVsPar = (d: number) => (d === 0 ? 'E' : d > 0 ? `+${d}` : `−${-d}`);
-const fmtValue = (r: MedalRule, v: number) => (r.unit === 'm' ? `${v} m` : fmtVsPar(v));
+const fmtValue = (r: MedalRule, v: number) => (r.unit === 'm' ? `${v} m` : r.unit === 'mm' ? `${v} mm` : fmtVsPar(v));
 
-/** The band for a medal, e.g. "40–75 m", "100 m+", "+3 to +1", "−2 or better". */
+/** The band for a medal, e.g. "40–75 m", "100 m+", "+3 to +1", "−2 or better", "within 4 mm". */
 export function bandLabel(r: MedalRule, t: Tier): string {
+  if (r.unit === 'mm') return `within ${fmtValue(r, r.thresholds[t])}`;
   const i = TIERS.indexOf(t);
   const lo = r.thresholds[t];
   const next = TIERS[i + 1];
@@ -73,6 +84,7 @@ export function nextTarget(r: MedalRule, v: number): string | null {
     const gap = Math.max(0.1, Math.ceil((goal - v) * 10) / 10);
     return `${gap.toFixed(1)} m more for ${next}`;
   }
+  if (r.unit === 'mm') return `${Math.max(0.1, Math.round((v - goal) * 10) / 10).toFixed(1)} mm closer for ${next}`;
   const gap = v - goal;
   return `${gap} ${gap === 1 ? 'throw' : 'throws'} fewer for ${next}`;
 }
