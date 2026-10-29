@@ -108,5 +108,25 @@ check(Math.abs(visibleLine(keep) - end) < 1e-9, 'visible line = judged line');
   const { gold, silver, bronze } = SPLIT_MEDALS.thresholds;
   check(gold < silver && silver < half && bronze > half, `gold (${gold}) and silver (${silver}) sit inside the bar→curl window (±${half.toFixed(2)} mm); bronze (${bronze}) reaches a little past it`);
 }
+// --- the drinker's-eye view: the picture depends only on the level, and keeps changing as it drops ---
+{
+  const { povLayout, tiltFor } = await import('../src/scripts/split-the-g/pov');
+  const { HEAD_MM } = await import('../src/scripts/split-the-g/physics');
+  const surf = (w: number, h: number, line: number) => {
+    const top = line + HEAD_MM, L = povLayout(w, h, top), r = radiusAt(top), tilt = tiltFor(top);
+    const at = (a: number) => L.P([Math.cos(a) * r, Math.sin(a) * r, top - r * Math.sin(a) * Math.tan(tilt)]);
+    const l = at(Math.PI), rr = at(0), far = at(Math.PI / 2);
+    return { width: rr.x - l.x, far: far.y };
+  };
+  for (const [w, h, name] of [[1024, 671, 'desktop'], [390, 600, 'phone']] as const) {
+    let ok = true, prev = Infinity;
+    for (let line = 140; line >= 20; line -= 0.5) { const s = surf(w, h, line); if (!(s.width < prev)) ok = false; prev = s.width; }
+    check(ok, `POV (${name}): the head's surface gets steadily smaller as the level drops`);
+    check(JSON.stringify(surf(w, h, TARGET)) === JSON.stringify(surf(w, h, TARGET)), `POV (${name}): the same level always draws the same`);
+    const a = surf(w, h, TARGET + 1), b = surf(w, h, TARGET - 1);
+    console.log(`POV (${name}): at the split line the surface is ${surf(w, h, TARGET).width.toFixed(0)} px across and changes ${((a.width - b.width) / 2).toFixed(1)} px per mm of level`);
+  }
+}
+
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : '\nall split checks passed');
 process.exit(failures ? 1 : 0);

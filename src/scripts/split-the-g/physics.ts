@@ -221,13 +221,17 @@ export interface Pint {
   emptied: boolean;
 }
 
+/** Head thickness (mm) on every pint. */
+export const HEAD_MM = 18;
+
 export function pourPint(char: Character, seed: number): Pint {
   const r = rng(seed);
   const sips: number[] = [];
   const gulps: number[] = [];
   for (let i = 0; i < 40; i++) { sips.push(i % 2 === 0 ? 0.22 + r() * 0.26 : 0.16 + r() * 0.34); gulps.push(r() < 0.25 ? 1.7 + r() * 0.4 : 0.7 + r() * 0.5); }
   const start = 138 + r() * 4;
-  const head = 16 + r() * 4;
+  r(); // (was a random head size; kept so every other random draw, and so the sim, is unchanged)
+  const head = HEAD_MM; // every pint gets the same head, so the drinker's-eye view of a level is always the same
   return {
     char,
     q: 0.9 + r() * 0.2,

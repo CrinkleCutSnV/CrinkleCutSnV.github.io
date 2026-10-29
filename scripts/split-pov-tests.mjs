@@ -19,6 +19,8 @@ await page.goto(`${BASE}/apps/split-the-g/`);
 await page.evaluate(() => localStorage.clear());
 await page.reload();
 await page.clock.runFor(300);
+// freeze time between steps, so slow screenshots don't let the drink run on
+await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
 const game = page.locator('[data-split-the-g]');
 await game.scrollIntoViewIfNeeded();
 const st = () => page.evaluate(() => window.__splitTheG.state);
@@ -29,7 +31,7 @@ const untilResult = async () => { for (let i = 0; i < 60 && (await st()).phase !
 await page.evaluate(() => window.__splitTheG.pick('walter'));
 await page.clock.runFor(3000);
 check((await st()).phase === 'ready' && await view() === 'bar', 'before you press: the bar view, Walter holding his pint');
-await game.screenshot({ path: `${OUT}/split-pov-01-bar-before.png` });
+await game.screenshot({ path: `${OUT}/split-pov2-01-bar-before.png` });
 
 // --- press: into Walter's eyes ---
 await page.mouse.move(10, 10);
@@ -37,25 +39,31 @@ await page.keyboard.down('Space');
 await page.clock.runFor(200);
 const mid = await st();
 check(await view() === 'turning' && mid.pov > 0.2 && mid.pov < 0.8, `pressing turns into the drinker's eyes (pov ${mid.pov.toFixed(2)} after 0.2 s)`);
-await game.screenshot({ path: `${OUT}/split-pov-02-transition.png` });
+await game.screenshot({ path: `${OUT}/split-pov2-02-transition.png` });
 await page.clock.runFor(300);
 check(await view() === 'pov', 'fully in POV within half a second');
-await page.clock.runFor(700);
 const l1 = (await st()).line;
-await page.clock.runFor(300);
+await game.screenshot({ path: `${OUT}/split-pov2-03a-walter-start.png` });
+const holdTo = async (mm) => { for (let i = 0; i < 400 && (await st()).line > mm; i++) await page.clock.runFor(20); };
+const TGT = (await st()).target;
+await holdTo((l1 + TGT) / 2);
+await game.screenshot({ path: `${OUT}/split-pov2-03b-walter-halfway.png` });
+await holdTo(TGT);
 const l2 = (await st()).line;
-check(l2 < l1 - 2, `in POV the level keeps dropping while you hold (${l1.toFixed(1)} → ${l2.toFixed(1)} mm)`);
-await game.screenshot({ path: `${OUT}/split-pov-03-walter.png` });
+check(l2 < l1 - 20, `in POV the level keeps dropping while you hold (${l1.toFixed(1)} → ${l2.toFixed(1)} mm)`);
+await game.screenshot({ path: `${OUT}/split-pov2-03c-walter-at-target.png` });
+await holdTo(TGT - 14);
+await game.screenshot({ path: `${OUT}/split-pov2-03d-walter-overshoot.png` });
 await page.keyboard.up('Space');
 await page.clock.runFor(200);
-check(await view() === 'pov' && (await st()).phase === 'settling', 'letting go: still in POV for a beat');
+{ const s2 = await st(); check(await view() === 'pov' && s2.phase === 'settling', `letting go: still in POV for a beat (${await view()}, ${s2.phase})`); }
 await page.clock.runFor(700);
 check(await view() === 'bar', 'then back to the bar');
 await untilResult();
 const r1 = await st();
 check(r1.phase === 'result' && r1.pov === 0, 'the result comes in the bar view');
 await page.clock.runFor(700);
-await game.screenshot({ path: `${OUT}/split-pov-04-result-back-at-bar.png` });
+await game.screenshot({ path: `${OUT}/split-pov2-04-result-back-at-bar.png` });
 
 // --- the POV doesn't change the scoring: a perfect release is still a perfect split ---
 await page.evaluate(() => { window.__splitTheG.pick('nigel'); window.__splitTheG.skipPour(); window.__splitTheG.autoRelease = window.__splitTheG.state.target; });
@@ -68,16 +76,16 @@ const perf = await st();
 check(perf.verdict.mm <= 0.3, `scoring unchanged: a perfect release still splits the G (${perf.verdict.mm} mm)`);
 await page.evaluate(() => { window.__splitTheG.autoRelease = null; });
 await page.clock.runFor(700);
-await game.screenshot({ path: `${OUT}/split-pov-05-perfect-back-at-bar.png` });
+await game.screenshot({ path: `${OUT}/split-pov2-05-perfect-back-at-bar.png` });
 
 // --- every drinker's POV ---
-for (const id of ['maureen', 'declan', 'nigel', 'dot', 'walter', 'pip']) {
+for (const id of ['maureen', 'declan', 'nigel', 'dot', 'pip']) {
   await page.evaluate((id) => { window.__splitTheG.pick(id); window.__splitTheG.skipPour(); }, id);
   await page.clock.runFor(100);
   await page.keyboard.down('Space');
-  await page.clock.runFor(id === 'declan' ? 1000 : 1300);
+  for (let i = 0; i < 400 && (await st()).line > 118; i++) await page.clock.runFor(20);
   check(await view() === 'pov', `${id}: POV while drinking`);
-  await game.screenshot({ path: `${OUT}/split-pov-drink-${id}.png` });
+  await game.screenshot({ path: `${OUT}/split-pov2-drink-${id}.png` });
   await page.keyboard.up('Space');
   await untilResult();
 }
@@ -110,14 +118,14 @@ check(ph.phase === 'drinking' && ph.pov === 1, 'phone: touch and hold goes into 
 // headless Chrome renders on the CPU, so judge POV against the bar view on the same machine
 check(fps >= 20 && fps >= barFps * 0.8, `phone, CPU slowed 4x: POV ${fps.toFixed(0)} fps vs bar view ${barFps.toFixed(0)} fps (software rendering)`);
 await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-await pg.screenshot({ path: `${OUT}/split-pov-06-mobile-pov.png` });
+await pg.screenshot({ path: `${OUT}/split-pov2-06-mobile-pov.png` });
 check(await phone.evaluate(() => scrollY) === y0, 'phone: dragging while holding does not scroll the page');
 check(await phone.evaluate(() => window.__menus) === 0 && menus === 0, 'phone: no long-press menu');
 await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 await phone.waitForFunction(() => window.__splitTheG.state.phase === 'result', null, { timeout: 8000 });
 check((await phone.evaluate(() => window.__splitTheG.state.pov)) === 0, 'phone: lifting the finger goes back to the bar for the result');
 await phone.waitForTimeout(700);
-await pg.screenshot({ path: `${OUT}/split-pov-07-mobile-result.png` });
+await pg.screenshot({ path: `${OUT}/split-pov2-07-mobile-result.png` });
 
 console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors');
 await browser.close();
