@@ -11,7 +11,7 @@ import { SPLIT_MEDALS } from '../../data/medals';
 const POV_IN = 0.4; // s to go from the bar into the drinker's eyes
 const POV_OUT = 0.45; // s back out to the bar
 const POV_HOLD = 0.4; // s to stay in their eyes after letting go
-const POUR_TIME = 2.8; // s for the pint to settle (while the 'Up next' card shows) before you're allowed a go
+const POUR_TIME = 2.8; // s for the pint to settle before you're allowed a go (the 'Up next' card stays until you dismiss it)
 const NEED_V = 288; // mm of scene above the bar, glass foot to the top of a tipped-back head
 const NEED_H = 236; // mm across, back of the head to the far side of the glass
 
@@ -29,7 +29,7 @@ export function initSplitTheG(root: HTMLElement) {
     who: $('[data-who]'), whoName: $('[data-who-name]'), whoDiff: $('[data-who-diff]'), best: $('[data-best]'),
     bubble: $('[data-bubble]'), hint: $('[data-hint]'), hintMain: $('[data-hint-main]'), hintSub: $('[data-hint-sub]'),
     intro: $('[data-intro]'), introFace: $<HTMLCanvasElement>('[data-intro-face]'), introName: $('[data-intro-name]'),
-    introTag: $('[data-intro-tag]'), introQuirk: $('[data-intro-quirk]'), introGo: $<HTMLButtonElement>('[data-intro-go]'),
+    introTag: $('[data-intro-tag]'), introQuirk: $('[data-intro-quirk]'), introGo: $<HTMLButtonElement>('[data-intro-go]'), introStatus: $('[data-intro-status]'),
     lineup: root.parentElement!.querySelector<HTMLElement>('[data-lineup]'),
     end: $('[data-end]'), endCard: $('.end-card'), rating: $('[data-end-rating]'), mm: $('[data-end-mm]'), where: $('[data-end-where]'),
     remark: $('[data-end-remark]'), medal: $('[data-end-medal]'), endBest: $('[data-end-best]'),
@@ -38,6 +38,7 @@ export function initSplitTheG(root: HTMLElement) {
 
   let w = 0, h = 0, dpr = 1;
   let phase: GamePhase = 'pouring';
+  let introOpen = false; // the 'Up next' card is up: it stays until the player dismisses it
   let char: Character = CHARACTERS[0];
   let lastId: string | null = null; // never the same drinker twice in a row
   let pint: Pint | null = null;
@@ -68,7 +69,25 @@ export function initSplitTheG(root: HTMLElement) {
     });
   }
   ui.again.addEventListener('click', () => newPint(randomChar()));
-  ui.introGo.addEventListener('click', () => { if (phase === 'pouring') phaseT = POUR_TIME; });
+  ui.introGo.addEventListener('click', () => dismissIntro());
+  // taps on the card are for the card: they never reach the pub (so they can't start a drink)
+  for (const ev of ['pointerdown', 'pointerup', 'touchstart'] as const) ui.intro.addEventListener(ev, (e) => e.stopPropagation());
+  function dismissIntro() {
+    if (!introOpen) return;
+    introOpen = false;
+    root.dataset.upnext = 'closed';
+    ui.intro.classList.add('is-hidden');
+    if (root.contains(document.activeElement)) (document.activeElement as HTMLElement).blur(); // so Space drinks
+    if (phase === 'pouring' && phaseT < POUR_TIME) showHint('Wait for it to settle!', 'The black stuff needs a moment.');
+  }
+  function becomeReady() {
+    setPhase('ready');
+    say(pickOne(char.quips.before));
+    showHint(matchMedia('(hover: none)').matches ? 'Press and hold to drink' : 'Press and hold to drink (or hold Space)', 'Let go to stop. One gulp per pint!');
+  }
+  function nudgeIntro() {
+    ui.introGo.classList.remove('is-nudged'); void ui.introGo.offsetWidth; ui.introGo.classList.add('is-nudged');
+  }
 
   function randomChar() {
     const others = CHARACTERS.filter((c) => c.id !== lastId || CHARACTERS.length === 1);
@@ -90,6 +109,9 @@ export function initSplitTheG(root: HTMLElement) {
     ui.introTag.textContent = c.tagline;
     ui.introQuirk.innerHTML = `<b>Quirk:</b> ${c.quirk} <span class="diffdots" title="Trickiness ${c.difficulty} of 4">${dots(c.difficulty)}</span>`;
     drawPortrait(ui.introFace, c);
+    ui.introStatus.textContent = 'Pouring their pint…';
+    introOpen = true;
+    root.dataset.upnext = 'open';
     ui.intro.classList.remove('is-hidden');
     ui.bubble.classList.add('is-hidden');
     ui.hint.classList.add('is-hidden');
@@ -112,6 +134,7 @@ export function initSplitTheG(root: HTMLElement) {
 
   // ---- input: hold anywhere on the pub to drink ----
   function press() {
+    if (introOpen) { nudgeIntro(); return false; } // read the card first: drinking needs a fresh press after it's gone
     if (phase === 'ready' && pint) {
       startDrinking(pint);
       setPhase('drinking');
@@ -137,8 +160,15 @@ export function initSplitTheG(root: HTMLElement) {
   root.addEventListener('contextmenu', (e) => e.preventDefault());
   const inView = () => { const r = root.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; };
   window.addEventListener('keydown', (e) => {
-    if (e.code !== 'Space' || !inView()) return;
+    if (!inView()) return;
     const tgt = e.target as HTMLElement;
+    // Space or Enter dismisses the 'Up next' card (only that: holding on doesn't start a drink)
+    if (introOpen && (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') && (tgt === ui.introGo || !tgt?.closest?.('button, a, input, textarea, select, summary'))) {
+      e.preventDefault();
+      if (!e.repeat) dismissIntro();
+      return;
+    }
+    if (e.code !== 'Space') return;
     if (tgt && (tgt.closest('button, a, input, textarea, select'))) return; // let Space press buttons
     if (phase === 'pouring' || phase === 'ready' || phase === 'drinking') e.preventDefault();
     if (!e.repeat) press();
@@ -194,11 +224,8 @@ export function initSplitTheG(root: HTMLElement) {
   function update(dt: number) {
     clock += dt; phaseT += dt;
     if (phase === 'pouring' && phaseT >= POUR_TIME) {
-      setPhase('ready');
-      ui.intro.classList.add('is-hidden');
-      if (root.contains(document.activeElement)) (document.activeElement as HTMLElement).blur(); // so Space drinks
-      say(pickOne(char.quips.before));
-      showHint(matchMedia('(hover: none)').matches ? 'Press and hold to drink' : 'Press and hold to drink (or hold Space)', 'Let go to stop. One gulp per pint!');
+      if (introOpen) { if (ui.introStatus.textContent !== 'Pint’s settled.') ui.introStatus.textContent = 'Pint’s settled.'; }
+      else becomeReady();
     }
     if (pint && (phase === 'drinking' || phase === 'settling')) {
       acc += dt;
@@ -334,7 +361,8 @@ export function initSplitTheG(root: HTMLElement) {
     pick: (id: string) => newPint(id === 'random' ? randomChar() : characterById(id)), // tests only: the game always picks at random
     next: () => newPint(randomChar()),
     seed: (n: number) => { seedOverride = n; },
-    skipPour: () => { if (phase === 'pouring') phaseT = POUR_TIME; },
+    skipPour: () => { if (phase === 'pouring') phaseT = POUR_TIME; dismissIntro(); },
+    get introOpen() { return introOpen; },
     set autoRelease(v: number | null) { autoRelease = v; },
     get state() {
       // where the G, the split line and the beer line are on screen (CSS px, canvas-relative), for tests

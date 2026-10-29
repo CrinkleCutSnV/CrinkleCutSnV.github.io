@@ -28,7 +28,7 @@ import { BRAND } from '../scripts/split-the-g/physics';
         <p class="intro-tag" data-intro-tag></p>
         <p class="intro-quirk" data-intro-quirk></p>
       </div>
-      <p class="intro-pour">Pouring their pint… <button type="button" class="btn btn--small" data-intro-go>Ready!</button></p>
+      <p class="intro-pour"><span data-intro-status>Pouring their pint…</span> <button type="button" class="btn btn--small intro-go" data-intro-go>Ready! 🍺</button></p>
     </div>
   </div>
 
@@ -101,6 +101,9 @@ import { BRAND } from '../scripts/split-the-g/physics';
   .intro-quirk :global(b) { color: #c2410c; }
   .intro-pour { grid-area: pour; margin: .2rem 0 0; display: flex; justify-content: space-between; align-items: center; gap: .6rem; font-weight: 700; opacity: .9; }
   .btn--small { font-size: .9rem; padding: .3rem .9rem; }
+  .intro-go { font-size: 1rem; min-height: 44px; padding: .45rem 1.1rem; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .intro-go:global(.is-nudged) { animation: nudge .45s ease; }
+  @keyframes nudge { 0%, 100% { transform: none; } 20% { transform: translateX(-5px) rotate(-3deg); } 45% { transform: translateX(5px) rotate(3deg); } 70% { transform: translateX(-3px); } }
   @keyframes slidein { from { transform: translateY(-14px) scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
   @media (min-width: 701px) {
     /* sits to the right of the glass, so the drinker's face stays in view */
@@ -159,10 +162,14 @@ import { BRAND } from '../scripts/split-the-g/physics';
     .lineup :global(canvas) { width: 56px; height: 56px; }
     .lineup :global(.quirk) { font-size: .74rem; }
     .intro { top: 3.2rem; }
+    /* the card already says who it is: keep the name pill from peeking out under it */
+    .stg[data-upnext='open'] .pill--who { visibility: hidden; }
     .intro-card { grid-template-columns: 64px 1fr; padding: .6rem .7rem .7rem; gap: .2rem .6rem; }
     .intro-face { width: 64px; height: 64px; }
-    .intro-tag { font-size: .8rem; }
-    .intro-quirk { font-size: .78rem; }
+    .intro-tag { font-size: .86rem; }
+    .intro-quirk { font-size: .84rem; }
+    .intro-pour { flex-wrap: wrap; }
+    .intro-go { flex: 1 1 100%; min-height: 48px; font-size: 1.05rem; }
     .hint { bottom: 2.5%; }
   }
   .is-hidden { display: none !important; }

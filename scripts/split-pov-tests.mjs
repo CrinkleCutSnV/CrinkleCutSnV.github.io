@@ -30,6 +30,8 @@ const untilResult = async () => { for (let i = 0; i < 60 && (await st()).phase !
 // --- bar view until you press ---
 await page.evaluate(() => window.__splitTheG.pick('walter'));
 await page.clock.runFor(3000);
+await page.click('[data-intro-go]');
+await page.clock.runFor(50);
 check((await st()).phase === 'ready' && await view() === 'bar', 'before you press: the bar view, Walter holding his pint');
 await game.screenshot({ path: `${OUT}/split-pov2-01-bar-before.png` });
 

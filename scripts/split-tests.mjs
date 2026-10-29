@@ -50,13 +50,53 @@ check(new Set(geos).size === 1, 'the glass, the G and the split line are identic
 await page.evaluate(() => window.__splitTheG.pick('maureen'));
 await page.clock.runFor(300);
 check(await phase() === 'pouring', 'a new pint settles first');
+// the Up next card stays until you dismiss it, however long you take to read it
+await page.clock.runFor(8000);
+const intro = page.locator('[data-intro]');
+check(await intro.isVisible() && await phase() === 'pouring' && /settled/i.test(await intro.innerText()), 'the Up next card stays up (8 s later, pint settled behind it) until you dismiss it');
+check(/Ready! 🍺/.test(await page.locator('[data-intro-go]').innerText()), 'its button says "Ready! 🍺"');
+await game.screenshot({ path: `${OUT}/split-upnext-desktop.png` });
+// clicking the pub while the card is up doesn't drink (or dismiss it)
+const gbx = await game.boundingBox();
+await page.mouse.move(gbx.x + gbx.width * 0.2, gbx.y + gbx.height * 0.8);
+await page.mouse.down(); await page.clock.runFor(300); await page.mouse.up();
+check(await intro.isVisible() && await phase() === 'pouring', 'clicking the pub while the card is up does nothing (the button gives a nudge)');
+// press-and-hold on "Ready!": it dismisses the card, and doesn't start a drink
+const rb = await page.locator('[data-intro-go]').boundingBox();
+await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
+await page.mouse.down(); await page.clock.runFor(600); await page.mouse.up();
+await page.clock.runFor(100);
+check(!(await intro.isVisible()) && await phase() === 'ready', 'clicking (even holding) "Ready!" dismisses the card without drinking');
+await page.mouse.down(); await page.clock.runFor(100);
+check(await phase() === 'drinking', 'a fresh press then drinks');
+await page.mouse.up();
+for (let i = 0; i < 40 && await phase() !== 'result'; i++) await page.clock.runFor(100);
+// Space dismisses it too; holding Space on doesn't drink, and pressing before it's settled says so
+await page.evaluate(() => window.__splitTheG.pick('maureen'));
+await page.clock.runFor(300);
 await page.mouse.move(10, 10);
 await page.keyboard.down('Space');
+await page.clock.runFor(300);
+check(!(await intro.isVisible()) && await phase() === 'pouring' && /Wait for it to settle/.test(await page.locator('[data-hint]').innerText()), 'Space dismisses the card; dismissed before the pint settles, it says "Wait for it to settle!"');
+await page.clock.runFor(2700);
+check(await phase() === 'ready', 'still holding Space from dismissing the card: it settles and is ready, but no drink');
+await page.keyboard.up('Space');
+await page.keyboard.down('Space');
 await page.clock.runFor(50);
-check(await phase() === 'pouring', 'pressing before it settles does nothing');
+check(await phase() === 'drinking', 'a fresh Space press drinks');
+await page.keyboard.up('Space');
+for (let i = 0; i < 40 && await phase() !== 'result'; i++) await page.clock.runFor(100);
+// Enter dismisses it as well; pressing early (after dismissing) still says wait
+await page.evaluate(() => window.__splitTheG.pick('maureen'));
+await page.clock.runFor(300);
+await page.keyboard.press('Enter');
+await page.clock.runFor(50);
+check(!(await intro.isVisible()), 'Enter dismisses the card');
+await page.keyboard.down('Space'); await page.clock.runFor(50);
+check(await phase() === 'pouring' && /Wait for it to settle/.test(await page.locator('[data-hint]').innerText()), 'pressing before it settles does nothing but "Wait for it to settle!"');
 await page.keyboard.up('Space');
 await page.clock.runFor(2700);
-check(await phase() === 'ready' && !(await page.locator('[data-intro]').isVisible()), 'then the card goes and it is ready');
+check(await phase() === 'ready' && !(await intro.isVisible()), 'then it is ready');
 // close-up of the glass with the G and the split line marked
 const g0 = (await st()).geo;
 const cb = await game.boundingBox();
@@ -118,6 +158,8 @@ await page.evaluate(() => { window.__splitTheG.autoRelease = null; });
 // --- a perfect split (auto-release at exactly the right moment) ---
 await page.evaluate(() => { window.__splitTheG.pick('maureen'); window.__splitTheG.autoRelease = window.__splitTheG.state.target; });
 await page.clock.runFor(2900);
+await page.click('[data-intro-go]');
+await page.clock.runFor(50);
 await page.keyboard.down('Space');
 for (let i = 0; i < 100 && await phase() === 'drinking'; i++) await page.clock.runFor(50);
 await page.keyboard.up('Space');
@@ -183,10 +225,17 @@ await phone.goto(`${BASE}/apps/split-the-g/`);
 await phone.clock.runFor(500);
 const pg = phone.locator('[data-split-the-g]');
 await pg.scrollIntoViewIfNeeded();
+await phone.clock.runFor(6000);
+check(await phone.locator('[data-intro]').isVisible(), 'phone: the Up next card stays up until you tap it');
+const gob = await phone.locator('[data-intro-go]').boundingBox();
+const cardb = await phone.locator('.intro-card').boundingBox();
+check(gob.height >= 44 && gob.width >= 200, `phone: "Ready!" is easy to tap (${gob.width.toFixed(0)}×${gob.height.toFixed(0)} px)`);
+check(cardb.x >= 0 && cardb.x + cardb.width <= 390 && await phone.evaluate(() => parseFloat(getComputedStyle(document.querySelector('[data-intro-quirk]')).fontSize)) >= 13, 'phone: the card fits the screen and the text is readable (≥ 13 px)');
 await pg.screenshot({ path: `${OUT}/split-v2-11-mobile-up-next.png` });
+await pg.screenshot({ path: `${OUT}/split-upnext-mobile.png` });
 await phone.tap('[data-intro-go]');
 await phone.clock.runFor(100);
-check((await phone.evaluate(() => window.__splitTheG.state.phase)) === 'ready', 'phone: "Ready!" on the Up next card skips the wait');
+check((await phone.evaluate(() => window.__splitTheG.state.phase)) === 'ready' && !(await phone.locator('[data-intro]').isVisible()), 'phone: tapping "Ready!" dismisses the card, ready to drink (no drink from the tap)');
 const pb = await pg.boundingBox();
 const y0 = await phone.evaluate(() => scrollY);
 const cdp = await phone.context().newCDPSession(phone);
