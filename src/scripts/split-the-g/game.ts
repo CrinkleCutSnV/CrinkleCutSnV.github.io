@@ -2,11 +2,15 @@ import {
   BEST_KEY, CHARACTERS, FIXED_DT, bestKeyFor, GLASS, G_MARK, TARGET, characterById, judge, pourPint, predictFinal, radiusAt, startDrinking, step, stopDrinking, visibleLine,
   type Character, type Expression, type Pint, type Verdict,
 } from './physics';
+import { drawPov } from './pov';
 import { drawArm, drawBar, drawBody, drawFace, drawGlass, drawGlug, drawHand, drawPortrait, drawPub, glassToScreen, type GlassView, type Pose } from './scene';
 import { readNumber, saveRecord } from '../scores';
 import { awardMedal, medalPopHtml } from '../medals';
 import { SPLIT_MEDALS } from '../../data/medals';
 
+const POV_IN = 0.4; // s to go from the bar into the drinker's eyes
+const POV_OUT = 0.45; // s back out to the bar
+const POV_HOLD = 0.4; // s to stay in their eyes after letting go
 const POUR_TIME = 2.8; // s for the pint to settle (while the 'Up next' card shows) before you're allowed a go
 const NEED_V = 288; // mm of scene above the bar, glass foot to the top of a tipped-back head
 const NEED_H = 236; // mm across, back of the head to the far side of the glass
@@ -46,6 +50,9 @@ export function initSplitTheG(root: HTMLElement) {
   let acc = 0;
   let seedOverride: number | null = null;
   let autoRelease: number | null = null;
+  let pov = 0; // 0 = bar view, 1 = through the drinker's eyes
+  let povTarget = 0;
+  let povHold = 0; // s to stay in the drinker's eyes after letting go
   let regionShift = 0; // 0 = scene centred, 1 = making room for the result card
 
   // ---- meet the regulars (view only: the pub picks your drinker) ----
@@ -72,7 +79,7 @@ export function initSplitTheG(root: HTMLElement) {
     char = c; lastId = c.id;
     pint = pourPint(c, seedOverride ?? Math.floor(Math.random() * 2 ** 31));
     seedOverride = null;
-    verdict = null; tash = 0; k = 0; acc = 0;
+    verdict = null; tash = 0; k = 0; acc = 0; pov = 0; povTarget = 0; povHold = 0;
     setPhase('pouring');
     ui.end.classList.add('is-hidden');
     ui.whoName.textContent = c.name;
@@ -201,13 +208,18 @@ export function initSplitTheG(root: HTMLElement) {
         if (phase === 'drinking' && autoRelease !== null && predictFinal(pint) <= autoRelease) release();
         if (phase === 'drinking' && pint.phase !== 'drinking') setPhase('settling'); // emptied the glass
       }
-      if (pint.phase === 'done') finish();
+      // the ref calls it back at the bar, once we're out of the drinker's eyes
+      if (pint.phase === 'done' && pov <= 0.001 && povTarget === 0) finish();
     }
     // the glass tips up while drinking, and comes back down with the drinker's lag
     const tipping = phase === 'drinking';
     const tau = tipping ? 0.1 : (pint?.lag ?? 0.25) * 0.8;
     k += ((tipping ? 1 : 0) - k) * (1 - Math.exp(-dt / tau));
     if (phase === 'drinking' && k > 0.7 && pint && pint.t > 0.25) tash = Math.min(1, tash + dt * 1.5);
+    // POV: in as soon as you start drinking, out again a beat after you stop
+    if (phase === 'drinking') { povTarget = 1; povHold = POV_HOLD; }
+    else if ((povHold -= dt) <= 0) povTarget = 0;
+    pov = povTarget > pov ? Math.min(povTarget, pov + dt / POV_IN) : Math.max(povTarget, pov - dt / POV_OUT);
     regionShift += ((phase === 'result' ? 1 : 0) - regionShift) * (1 - Math.exp(-dt / 0.18));
   }
 
@@ -253,6 +265,21 @@ export function initSplitTheG(root: HTMLElement) {
 
   function draw() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (pov < 1 || !pint) {
+      // zoom in towards the drinker's face as we go into their eyes
+      const z = 1 + 0.7 * ease(pov);
+      if (z > 1) {
+        const hd = scene().head;
+        ctx.translate(hd.x, hd.y); ctx.scale(z, z); ctx.translate(-hd.x, -hd.y);
+      }
+      drawBarView();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    if (pov > 0 && pint) drawPov(ctx, char, pint, { w, h, k: pov, t: clock });
+    root.dataset.view = pov >= 1 ? 'pov' : pov > 0 ? 'turning' : 'bar';
+  }
+
+  function drawBarView() {
     const sc = scene();
     const { s, barY, gv, head } = sc;
     drawPub(ctx, w, h, barY, clock);
@@ -315,7 +342,7 @@ export function initSplitTheG(root: HTMLElement) {
       const y = (v: number) => glassToScreen(gv, 0, GLASS.base + v).y;
       const line = pint ? visibleLine(pint) : null;
       const geo = { s, glassX: gv.x, glassY: gv.y, angle: gv.angle, gLeft: gv.x - G_MARK.R * s, gRight: gv.x + G_MARK.R * s, gTop: y(G_MARK.top), gBottom: y(G_MARK.bottom), bar: y(G_MARK.barY), curl: y(G_MARK.curl.v), target: y(TARGET), line: line === null ? null : y(line), rimTop: y(GLASS.height + 4), foot: gv.y };
-      return { phase, char: char.id, line, target: TARGET, g: { ...G_MARK }, geo, verdict, k, pintPhase: pint?.phase, emptied: pint?.emptied };
+      return { phase, char: char.id, line, target: TARGET, g: { ...G_MARK }, geo, verdict, k, pov, pintPhase: pint?.phase, emptied: pint?.emptied };
     },
   };
 

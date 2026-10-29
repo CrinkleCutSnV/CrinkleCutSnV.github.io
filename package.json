@@ -14,7 +14,7 @@
     "test:scores": "node scripts/scores-tests.mjs",
     "test:swoop": "node scripts/swoop-tests.mjs",
     "check:split": "esbuild scripts/split-sim.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/split-sim.mjs --format=esm && node node_modules/.cache/split-sim.mjs",
-    "test:split": "npm run check:split && node scripts/split-tests.mjs"
+    "test:split": "npm run check:split && node scripts/split-tests.mjs && node scripts/split-pov-tests.mjs"
   },
   "dependencies": {
     "astro": "^5.18.2",
