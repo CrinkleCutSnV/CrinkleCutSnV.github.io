@@ -16,6 +16,7 @@ const HAT_LIFT = 0.75; // s to lift the glass and flip it over the head
 const HAT_DROP = 0.15; // s to plonk it down
 const HAT_LAND = HAT_LIFT + HAT_DROP;
 const HAT_TIME = 1.7; // s of hat before the result card
+const HAT_SCALE = 0.5; // the hat is drawn at half the bar-scene glass, so it sits like a real pint on a head
 const POUR_TIME = 2.8; // s for the pint to settle before you're allowed a go (the 'Up next' card stays until you dismiss it)
 const NEED_V = 288; // mm of scene above the bar, glass foot to the top of a tipped-back head
 const NEED_H = 236; // mm across, back of the head to the far side of the glass
@@ -346,7 +347,9 @@ export function initSplitTheG(root: HTMLElement) {
     zoomed(() => { drawBody(ctx, char, pose, h); drawFace(ctx, char, pose); });
     drawBar(ctx, w, h, barY);
     const glass = hat ? hat.gv : gv;
-    const grip = glassToScreen(glass, -(radiusAt(60) + 2.6), GLASS.base + 60);
+    // for the hat, the hand slides down to hold it by the rim, like doffing a cap
+    const gripV = hat ? 60 + 80 * ease(Math.min(1, hatT / HAT_LAND)) : 60;
+    const grip = glassToScreen(glass, -(radiusAt(gripV) + 2.6), GLASS.base + gripV);
     // shadow under the glass
     ctx.fillStyle = `rgba(0,0,0,${0.3 * (1 - ease(k)) * (hat ? Math.max(0, 1 - hatT / 0.3) : 1)})`;
     ctx.beginPath(); ctx.ellipse(sc.gx + 6 * s, sc.gy, 40 * s, 5 * s, 0, 0, Math.PI * 2); ctx.fill();
@@ -359,8 +362,8 @@ export function initSplitTheG(root: HTMLElement) {
         verdict: phase === 'result' && pint && !hat ? { line: visibleLine(pint), good: (verdict?.mm ?? 99) <= SPLIT_MEDALS.thresholds.silver } : null,
         empty: !!hat,
       });
-      if (hat) drawHatFoam(ctx, glass, head.R, hatT - HAT_LAND);
-      drawHand(ctx, char, grip, head.R, glass.angle);
+      if (hat) drawHatFoam(ctx, glass, head.R * 0.7, hatT - HAT_LAND);
+      drawHand(ctx, char, grip, head.R * (hat ? 0.8 + 0.2 * (glass.s / s) : 1), glass.angle);
     });
     if (phase === 'drinking' && k > 0.6) drawGlug(ctx, head.x - head.R * 0.5, head.y, clock, head.R);
     if (phase === 'result' && pint && verdict && !hat) drawVerdictLabels(sc, visibleLine(pint), verdict);
@@ -377,9 +380,10 @@ export function initSplitTheG(root: HTMLElement) {
     const R = head.R, fit = hatFit(char);
     const clamp = (x: number) => Math.max(0, Math.min(1, x));
     const angle = -Math.PI + fit.tilt; // tipped towards the drinker and right over
-    const rimOff = glassToScreen({ x: 0, y: 0, s, angle }, 0, GLASS.base + GLASS.height);
+    const hs = s * HAT_SCALE;
+    const rimOff = glassToScreen({ x: 0, y: 0, s: hs, angle }, 0, GLASS.base + GLASS.height);
     const land = { x: head.x + fit.dx * R - rimOff.x, y: head.y - fit.crown * R - rimOff.y };
-    const hover = 0.7 * R;
+    const hover = 0.5 * R;
     const a = ease(clamp(hatT / HAT_LIFT)), b = clamp((hatT - HAT_LIFT) / HAT_DROP), tb = hatT - HAT_LAND;
     let x = gv.x + (land.x - gv.x) * a;
     let y = gv.y + (land.y - hover - gv.y) * a - Math.sin(Math.PI * a) * 0.6 * R;
@@ -395,7 +399,7 @@ export function initSplitTheG(root: HTMLElement) {
     const room = barY - (44 + 12);
     const need = barY - footTop;
     const zoom = 1 - (1 - Math.min(1, room / need)) * ease(clamp(hatT / HAT_LIFT));
-    return { gv: { x, y, s, angle: ang } as GlassView, zoom };
+    return { gv: { x, y, s: s + (hs - s) * a, angle: ang } as GlassView, zoom };
   }
 
   function drawVerdictLabels(sc: ReturnType<typeof scene>, line: number, v: Verdict) {

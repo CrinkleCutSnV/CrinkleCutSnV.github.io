@@ -722,12 +722,12 @@ export interface HatFit {
 }
 /** Where an upside-down pint sits on each drinker's head art. */
 export const HAT_FIT: Record<string, HatFit> = {
-  maureen: { crown: 0.74, tilt: -0.07, dx: -0.02 }, // perched on top of the bob
-  declan: { crown: 0.6, tilt: 0.09, dx: 0.03 }, // jammed on like a scrum cap
-  nigel: { crown: 0.64, tilt: 0.15, dx: 0.05 }, // a bit wonky, naturally
-  dot: { crown: 0.88, tilt: -0.11, dx: -0.04 }, // riding high on the curls
-  walter: { crown: 0.98, tilt: 0.06, dx: 0.06 }, // balanced on top of the flat cap
-  pip: { crown: 0.52, tilt: 0, dx: 0 }, // straight down on the dome
+  maureen: { crown: 1.0, tilt: -0.08, dx: -0.03 }, // perched on top of the bob
+  declan: { crown: 0.9, tilt: 0.1, dx: 0.04 }, // jammed on like a scrum cap
+  nigel: { crown: 0.95, tilt: 0.18, dx: 0.06 }, // a bit wonky, naturally
+  dot: { crown: 1.12, tilt: -0.12, dx: -0.05 }, // riding high on the curls
+  walter: { crown: 1.14, tilt: 0.07, dx: 0.08 }, // balanced on top of the flat cap
+  pip: { crown: 0.88, tilt: 0, dx: 0 }, // straight down on the dome
 };
 export const hatFit = (c: Character): HatFit => HAT_FIT[c.id] ?? { crown: 0.7, tilt: 0, dx: 0 };
 
