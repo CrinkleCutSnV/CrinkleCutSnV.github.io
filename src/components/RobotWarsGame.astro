@@ -2,6 +2,7 @@
 // Robot Rumble. All logic lives in src/scripts/robot-wars/.
 import { PART_IDS, PARTS, PART_LABEL, DRIVES, WEAPONS, BODIES, ZONES, type PartKind } from '../scripts/robot-wars/sim';
 const kinds = Object.keys(PART_IDS) as PartKind[];
+const info = (kind: PartKind, id: string) => (PARTS[kind] as Record<string, { name: string; blurb: string }>)[id];
 const hint = (kind: PartKind, id: string): string => {
   if (kind === 'drive') { const d = DRIVES[id as keyof typeof DRIVES]; return `Fast on ${ZONES[d.fast].name.toLowerCase()} · slow on ${ZONES[d.slow].name.toLowerCase()}`; }
   if (kind === 'weapon') { const w = WEAPONS[id as keyof typeof WEAPONS]; return `Strong vs ${BODIES[w.strong].name} · weak vs ${BODIES[w.weak].name}`; }
@@ -35,9 +36,9 @@ const hint = (kind: PartKind, id: string): string => {
           <legend>{PART_LABEL[kind]}</legend>
           <div class="opts" role="radiogroup" aria-label={PART_LABEL[kind]}>
             {PART_IDS[kind].map((id) => {
-              const p = (PARTS[kind] as Record<string, { name: string; blurb: string }>)[id];
+              const p = info(kind, id);
               return (
-                <button type="button" class="opt" role="radio" aria-checked="false" data-part={kind} data-id={id} title={p.blurb}>
+                <button type="button" class="opt" role="radio" aria-checked="false" data-part={kind} data-id={id} title={p.blurb} data-blurb={p.blurb} data-hint={hint(kind, id)}>
                   <canvas class="opt-icon" data-icon aria-hidden="true"></canvas>
                   <span class="opt-name">{p.name}</span>
                 </button>
@@ -45,7 +46,6 @@ const hint = (kind: PartKind, id: string): string => {
             })}
           </div>
           <p class="opt-hint" data-hint-for={kind}></p>
-          {PART_IDS[kind].map((id) => <template data-hint-text={`${kind}:${id}`}>{(PARTS[kind] as Record<string, { blurb: string }>)[id].blurb}{hint(kind, id) && <b>{hint(kind, id)}</b>}</template>)}
         </fieldset>
       ))}
     </div>

@@ -1,0 +1,72 @@
+---
+import Base from '../../../layouts/Base.astro';
+import RobotWarsGame from '../../../components/RobotWarsGame.astro';
+import { TITLE, TIME_LIMIT, DRIVES, WEAPONS, BODIES, BRAINS, ZONES, ZONE_IDS, PART_IDS, STRONG, WEAK, SPEED, DIR_MUL, matchup, terrain } from '../../../scripts/robot-wars/sim';
+import { ROBOT_MEDALS } from '../../../data/medals';
+const t = ROBOT_MEDALS.thresholds;
+const cell = { strong: `💪 ×${STRONG}`, weak: `🛡️ ×${WEAK}`, even: '×1' } as const;
+const sp = { fast: `🚀 ×${SPEED.fast}`, slow: `🐌 ×${SPEED.slow}`, medium: '×1' } as const;
+---
+<Base title={`${TITLE} · CrinkleCutSnV's playground`} description="Build a fighting robot from four parts, then watch it battle a string of silly challengers. How long can your streak last?">
+  <section class="wrap game-page">
+    <div class="title-row">
+      <h1>{TITLE} 🤖</h1>
+      <a class="back" href="/">← All apps</a>
+    </div>
+    <p class="lede">Pick a drive, a weapon, a body and a computer, then sit back: the fight runs itself. Win and the next challenger rolls in (your robot gets patched up in between). Lose and the run’s over.</p>
+    <RobotWarsGame />
+    <details class="how">
+      <summary>How it works</summary>
+      <p>Each fight is in a square arena split into four zones, shuffled every fight. Both robots are fully autonomous: your choices are all made in the workshop. A fight lasts up to {TIME_LIMIT} seconds. Knock the other robot out to win, or have dealt more damage when the time runs out. You can watch at 1× or 2×.</p>
+
+      <h3>Weapons vs bodies</h3>
+      <p>Every weapon has one body it’s great against (💪 more damage, and its knock-about effect is bigger too) and one it struggles with (🛡️).</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Weapon ↓ / body →</th>{PART_IDS.body.map((b) => <th>{BODIES[b].name}</th>)}</tr></thead>
+        <tbody>{PART_IDS.weapon.map((w) => <tr><th>{WEAPONS[w].name}</th>{PART_IDS.body.map((b) => <td class={matchup(w, b)}>{cell[matchup(w, b)]}</td>)}</tr>)}</tbody>
+      </table></div>
+
+      <h3>Drives vs ground</h3>
+      <p>Every drive has a zone it flies on and a zone it hates. Speed and turning both change, and so does how easily it dodges.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Drive ↓ / zone →</th>{ZONE_IDS.map((z) => <th>{ZONES[z].name}</th>)}</tr></thead>
+        <tbody>{PART_IDS.drive.map((d) => <tr><th>{DRIVES[d].name}</th>{ZONE_IDS.map((z) => <td class={terrain(d, z)}>{sp[terrain(d, z)]}</td>)}</tr>)}</tbody>
+      </table></div>
+
+      <h3>Where you hit them</h3>
+      <p>Hits to the front do normal damage, hits to the side do ×{DIR_MUL.side}, and hits from behind do ×{DIR_MUL.rear}. Robots only see what’s in front of them, so anything beside or behind them is hard to track.</p>
+
+      <h3>Bodies</h3>
+      <ul>{PART_IDS.body.map((b) => <li><b>{BODIES[b].name}</b> ({BODIES[b].hp} HP): {BODIES[b].blurb}</li>)}</ul>
+
+      <h3>Computers</h3>
+      <ul>
+        <li><b>{BRAINS.aggressive.name}:</b> charges straight in and keeps swinging.</li>
+        <li><b>{BRAINS.conservative.name}:</b> hangs back facing the enemy and only pounces when it sees an opening: the enemy is reloading, stunned or looking the other way.</li>
+        <li><b>{BRAINS.flanker.name}:</b> circles on the edge of the enemy’s reach and holds its fire until it can get round to the side or the back.</li>
+        <li><b>{BRAINS.tactician.name}:</b> finds the zone that’s best for its drive and worst for the enemy’s, and lures the fight there.</li>
+      </ul>
+      <p>Any computer that’s behind on damage in the last few seconds stops being clever and goes all out.</p>
+
+      <h3>Medals</h3>
+      <p>Medals are for your win streak with one robot: bronze for {t.bronze} win, silver for {t.silver} wins in a row, gold for {t.gold} or more. Every challenger has random parts, so some fights are uphill. That’s the game!</p>
+    </details>
+  </section>
+</Base>
+<style>
+  .game-page { padding-bottom: 2rem; }
+  .title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin: .25rem 0 .4rem; }
+  .lede { margin: 0 0 1rem; max-width: 70ch; line-height: 1.45; }
+  .back { font-weight: 700; text-decoration: none; }
+  .how { margin-top: 1.5rem; max-width: 76ch; line-height: 1.5; }
+  .how summary { font-weight: 800; cursor: pointer; }
+  .how h3 { margin: 1.1rem 0 .3rem; font-size: 1.05rem; }
+  .tbl { overflow-x: auto; }
+  table { border-collapse: collapse; font-size: .9rem; background: #fff; border: 2px solid var(--ink); }
+  th, td { border: 1px solid var(--ink); padding: .3rem .55rem; text-align: center; white-space: nowrap; }
+  thead th { background: var(--sun); }
+  tbody th { text-align: left; }
+  td.strong, td.fast { background: #d6f5e0; font-weight: 800; }
+  td.weak, td.slow { background: #fde0dc; font-weight: 800; }
+</style>
