@@ -11,7 +11,8 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME || un
 
 const ME = { drive: 'hover', weapon: 'hammer', body: 'dome', brain: 'flanker' };
 const THEM = { drive: 'tracks', weapon: 'flipper', body: 'box', brain: 'aggressive' };
-const FORCE = { name: 'Kettle of Doom', build: THEM, layout: ['steel', 'ice', 'sand', 'rubble'], seed: 2 }; // a close KO win at ~33 s
+const FORCE = { name: 'Kettle of Doom', build: THEM, layout: ['steel', 'ice', 'sand', 'rubble'], seed: 45 }; // a nail-biting KO win at ~35 s, with a hit mid-arena at 25.1 s
+const MOMENT = 25.12;
 
 async function run(label, ctxOpts) {
   const errors = [];
@@ -71,15 +72,9 @@ async function run(label, ctxOpts) {
   const t2 = (await st()).t;
   check(Math.abs(t2 - t1 - 8) < 1, `${label}: 2× runs twice as fast (${(t2 - t1).toFixed(2)} s in 4 s)`);
   await page.locator('[data-speed="1"]').click();
-  // get to a juicy moment: just after a hit, mid-fight
+  // jump to a juicy moment: just after a hit in the middle of the arena
   let s = await st();
-  for (let i = 0; i < 400 && s.t < 30; i++) {
-    const before = s.hp.reduce((a, b) => a + b, 0);
-    await page.clock.runFor(50);
-    s = await st();
-    if (s.t > 18 && s.hp.reduce((a, b) => a + b, 0) < before - 10) break;
-  }
-  await page.clock.runFor(80);
+  await page.clock.runFor(Math.round((MOMENT - s.t) * 1000) + 60);
   s = await st();
   check(s.log >= 3, `${label}: commentary is running (${s.log} lines)`);
   check(s.hp[0] < 155 && s.hp[1] < 155, `${label}: both robots have taken damage by ${s.t.toFixed(1)} s (${s.hp.map(Math.round).join(' / ')} HP)`);

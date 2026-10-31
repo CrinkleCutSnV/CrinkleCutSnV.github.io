@@ -115,12 +115,12 @@ const hint = (kind: PartKind, id: string): string => {
 
 <style>
   .rr { --team0: #48cae4; --team1: #ff7a59; color: var(--ink); }
-  .btn { font: inherit; font-weight: 800; font-size: 1rem; background: var(--accent); color: #fff; border: 3px solid var(--ink); border-radius: 999px; padding: .5rem 1.2rem; box-shadow: 3px 3px 0 var(--ink); cursor: pointer; touch-action: manipulation; }
-  .btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
-  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
-  .btn--ghost { background: #fff; color: var(--ink); }
-  .btn--big { font-size: 1.2rem; padding: .6rem 1.5rem; min-height: 48px; }
-  .btn--small { font-size: .9rem; padding: .35rem .9rem; }
+  .rr :global(.btn) { font: inherit; font-weight: 800; font-size: 1rem; background: var(--accent); color: #fff; border: 3px solid var(--ink); border-radius: 999px; padding: .5rem 1.2rem; box-shadow: 3px 3px 0 var(--ink); cursor: pointer; touch-action: manipulation; }
+  .rr :global(.btn:hover) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+  .rr :global(.btn:active) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  .rr :global(.btn--ghost) { background: #fff; color: var(--ink); }
+  .rr :global(.btn--big) { font-size: 1.2rem; padding: .6rem 1.5rem; min-height: 48px; }
+  .rr :global(.btn--small) { font-size: .9rem; padding: .35rem .9rem; }
   .is-hidden { display: none !important; }
 
   /* ---- the workshop ---- */
@@ -237,7 +237,8 @@ const hint = (kind: PartKind, id: string): string => {
     .hud { gap: .35rem; grid-template-columns: 1fr auto 1fr; }
     .side { padding: .25rem .4rem .35rem; border-width: 2px; box-shadow: 2px 2px 0 var(--ink); }
     .side-name { font-size: .78rem; }
-    .side-top { flex-wrap: wrap; }
+    .side-top { flex-wrap: nowrap; }
+    .side-dealt::before { content: ''; }
     .side-dealt { font-size: .7rem; }
     .timer { font-size: 1.2rem; }
     .spd { font-size: .75rem; padding: .1rem .45rem; min-height: 30px; }
@@ -246,7 +247,8 @@ const hint = (kind: PartKind, id: string): string => {
     .intro-map { grid-template-columns: 72px 1fr; }
     .intro-map canvas { width: 72px; height: 72px; }
     .intro-notes, .intro-parts { font-size: .78rem; }
-    .btn--big { font-size: 1.05rem; }
+    .rr :global(.btn--big) { font-size: 1.05rem; }
+    .end-buttons :global(.btn) { font-size: .9rem; padding: .4rem .85rem; }
     .stage { border-width: 2px; box-shadow: 4px 4px 0 var(--ink); }
   }
 </style>

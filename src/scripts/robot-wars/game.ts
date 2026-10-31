@@ -147,6 +147,7 @@ export function initRobotWars(root: HTMLElement) {
 
   function showIntro() {
     const b = battle!, me = b.bots[0], them = b.bots[1];
+    ui.intro.classList.remove('is-hidden'); // visible first, so the canvases have a size to draw at
     ui.introKicker.textContent = fightNo === 1 ? 'Fight 1 · Your first challenger' : `Fight ${fightNo} · Win streak ${streak}`;
     for (const side of [0, 1] as const) {
       const c = root.querySelector<HTMLCanvasElement>(`[data-intro-bot="${side}"]`)!;
@@ -174,7 +175,6 @@ export function initRobotWars(root: HTMLElement) {
       `They’re fast on ${ZONE_EMOJI[fastZone(them.build)]} (${zoneWhere(b.layout, fastZone(them.build))}), slow on ${ZONE_EMOJI[slowZone(them.build)]}`,
     ];
     ui.introNotes.innerHTML = notes.map((n) => `<li>${n}</li>`).join('');
-    ui.intro.classList.remove('is-hidden');
     setTimeout(() => ui.go.focus({ preventScroll: true }), 50);
   }
   ui.go.addEventListener('click', () => {
@@ -234,6 +234,7 @@ export function initRobotWars(root: HTMLElement) {
         let s = `${A} ${pickOne(HIT_VERB[e.weapon!])} ${B} for <b>${Math.round(e.dmg!)}</b>`;
         if (e.dir === 'rear') s += pickOne([' — right up the back! Double damage!', ' from behind! Cheeky, and double damage.', ' — never saw it coming! ×2']);
         else if (e.dir === 'side') s += pickOne([' in the side. ×1.5', ' — a lovely side swipe. ×1.5']);
+        else s += '.';
         if (e.match === 'strong') s += pickOne([' That’s its weak spot!', ' Ooh, that’ll leave a mark.', ' Textbook.']);
         else if (e.match === 'weak') s += pickOne([' …barely a scratch.', ' It just bounces off.', ' Not very effective.']);
         if (e.weapon === 'flipper' && e.match !== 'weak') s += ' Over it goes!';
@@ -434,7 +435,7 @@ export function initRobotWars(root: HTMLElement) {
 
   // for the tests and for poking about in the console
   (window as any).__robotWars = {
-    state: () => ({ phase, streak, fightNo, build: { ...build }, name, speed, best: best(), opponent: opp, t: battle?.t ?? 0, winner: battle?.winner ?? null, reason: battle?.reason ?? null, hp: battle?.bots.map((b) => b.hp), events: battle?.events.length ?? 0, log: ui.log.children.length }),
+    state: () => ({ phase, streak, fightNo, build: { ...build }, name, speed, best: best(), opponent: opp, t: battle?.t ?? 0, winner: battle?.winner ?? null, reason: battle?.reason ?? null, hp: battle?.bots.map((b) => b.hp), pos: battle?.bots.map((b) => [b.x, b.y]), events: battle?.events.length ?? 0, log: ui.log.children.length }),
     pick: (kind: PartKind, id: string) => { build = { ...build, [kind]: id } as Build; refreshBuilder(); },
     setName: (n: string) => { name = n; ui.name.value = n; save(); },
     force: (f: typeof forced) => { forced = f; },
