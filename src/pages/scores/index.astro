@@ -152,6 +152,9 @@ const withMedals = gameScores.filter((g) => g.medals);
         } else if (fmt.kind === 'metres') {
           value.textContent = `${v.toFixed(fmt.decimals ?? 1)} m`;
           if (extra) extra.textContent = '';
+        } else if (fmt.kind === 'wins') {
+          value.textContent = `${v} ${v === 1 ? 'win' : 'wins'}`;
+          if (extra) extra.textContent = headline ? (v >= 3 ? 'Champion streak!' : v === 0 ? 'Still looking for a first win' : 'in a row') : '';
         } else {
           value.textContent = headline ? `${v} ${v === 1 ? 'throw' : 'throws'}` : String(v);
           if (extra) {

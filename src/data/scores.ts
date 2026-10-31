@@ -5,14 +5,17 @@
 //    all pick it up automatically.
 import { HOLES } from '../scripts/disc-golf/physics';
 import { BEST_KEY as SPLIT_BEST, CHARACTERS, bestKeyFor } from '../scripts/split-the-g/physics';
-import { DISC_GOLF_MEDALS, PLANE_MEDALS, SPLIT_MEDALS, type MedalRule } from './medals';
+import { DISC_GOLF_MEDALS, PLANE_MEDALS, ROBOT_MEDALS, SPLIT_MEDALS, type MedalRule } from './medals';
+import { BEST_STREAK_KEY } from '../scripts/robot-wars/keys';
 
 export type ScoreFormat =
   | { kind: 'metres'; decimals?: number }
   /** golf-style: fewer is better, shown with the par */
   | { kind: 'strokes'; par: number; scoreName?: boolean }
   /** millimetres off a target: lower is better, 0 is perfect */
-  | { kind: 'mm' };
+  | { kind: 'mm' }
+  /** fights won in a row: higher is better */
+  | { kind: 'wins' };
 
 export interface ScoreStat {
   key: string; // localStorage key
@@ -83,6 +86,15 @@ export const gameScores: GameScores[] = [
       title: 'Closest with each drinker',
       stats: CHARACTERS.map((c) => ({ key: bestKeyFor(c.id), label: c.name, badge: c.name.replace(/[^A-Za-z]/g, '').charAt(0), format: { kind: 'mm' } as ScoreFormat, note: `Trickiness ${c.difficulty} of 4` })),
     },
+  },
+  {
+    slug: 'robot-wars',
+    title: 'Robot Rumble',
+    icon: '/icons/robot-wars.svg',
+    emoji: '🤖',
+    colour: '#a0c4ff',
+    headline: { key: BEST_STREAK_KEY, label: 'Longest win streak (fights won in a row with one robot)', format: { kind: 'wins' } },
+    medals: ROBOT_MEDALS,
   },
 ];
 

@@ -37,6 +37,15 @@ export const apps: AppCard[] = [
     icon: '/icons/split-the-g.svg',
     colour: '#e9c46a',
     tags: ['Game', 'Timing', 'Canvas'],
+  },
+  {
+    slug: 'robot-wars',
+    title: 'Robot Rumble',
+    blurb: 'Bolt together a fighting robot from wheels, weapons, armour and a brain, then watch it battle random challengers across steel, sand, ice and rubble. How many can it beat in a row?',
+    emoji: '🤖',
+    icon: '/icons/robot-wars.svg',
+    colour: '#a0c4ff',
+    tags: ['Game', 'Autobattler', 'Canvas'],
     status: 'new',
   },
 ];

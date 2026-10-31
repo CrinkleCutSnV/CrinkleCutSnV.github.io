@@ -17,7 +17,7 @@ export interface MedalRule {
   better: 'higher' | 'lower';
   /** the value needed for each medal */
   thresholds: Record<Tier, number>;
-  unit: 'm' | 'vsPar' | 'mm';
+  unit: 'm' | 'vsPar' | 'mm' | 'wins';
 }
 
 export const PLANE_MEDALS: MedalRule = {
@@ -49,16 +49,27 @@ export const SPLIT_MEDALS: MedalRule = {
   unit: 'mm',
 };
 
-export const MEDAL_RULES: MedalRule[] = [PLANE_MEDALS, DISC_GOLF_MEDALS, SPLIT_MEDALS];
+export const ROBOT_MEDALS: MedalRule = {
+  game: 'robot-wars',
+  key: 'crinklecut.robotWars.medal',
+  measure: 'how many fights in a row each robot wins in one run',
+  better: 'higher',
+  // wins in a row
+  thresholds: { bronze: 1, silver: 2, gold: 3 },
+  unit: 'wins',
+};
+
+export const MEDAL_RULES: MedalRule[] = [PLANE_MEDALS, DISC_GOLF_MEDALS, SPLIT_MEDALS, ROBOT_MEDALS];
 
 // ---- formatting --------------------------------------------------------------------
 export const fmtVsPar = (d: number) => (d === 0 ? 'E' : d > 0 ? `+${d}` : `−${-d}`);
-const fmtValue = (r: MedalRule, v: number) => (r.unit === 'm' ? `${v} m` : r.unit === 'mm' ? `${v} mm` : fmtVsPar(v));
+const fmtValue = (r: MedalRule, v: number) => (r.unit === 'm' ? `${v} m` : r.unit === 'mm' ? `${v} mm` : r.unit === 'wins' ? `${v} ${v === 1 ? 'win' : 'wins'}` : fmtVsPar(v));
 
 /** The band for a medal, e.g. "40–75 m", "100 m+", "+3 to +1", "−2 or better", "within 4 mm". */
 export function bandLabel(r: MedalRule, t: Tier): string {
   if (r.unit === 'mm') return `within ${fmtValue(r, r.thresholds[t])}`;
   const i = TIERS.indexOf(t);
+  if (r.unit === 'wins') return TIERS[i + 1] ? fmtValue(r, r.thresholds[t]) : `${fmtValue(r, r.thresholds[t]).replace(/ wins?$/, '')}+ wins`;
   const lo = r.thresholds[t];
   const next = TIERS[i + 1];
   if (r.better === 'higher') return next ? `${lo}–${fmtValue(r, r.thresholds[next])}` : `${fmtValue(r, lo)}+`;
@@ -80,6 +91,7 @@ export function nextTarget(r: MedalRule, v: number): string | null {
   const next = TIERS[won ? TIERS.indexOf(won) + 1 : 0];
   if (!next) return null;
   const goal = r.thresholds[next];
+  if (r.unit === 'wins') { const gap = goal - v; return `${gap} more ${gap === 1 ? 'win' : 'wins'} in a row for ${next}`; }
   if (r.better === 'higher') {
     const gap = Math.max(0.1, Math.ceil((goal - v) * 10) / 10);
     return `${gap.toFixed(1)} m more for ${next}`;
