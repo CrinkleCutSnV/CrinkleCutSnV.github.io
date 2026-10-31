@@ -350,8 +350,52 @@ export function drawPartIcon(ctx: CanvasRenderingContext2D, kind: keyof Build, i
   ctx.clearRect(0, 0, size, size);
   const base: Build = { drive: 'wheels', weapon: 'flipper', body: 'box', brain: 'aggressive' };
   const build = { ...base, [kind]: id } as Build;
-  const k = size / 22;
-  const look: BotLook = { x: 11, y: 11.5, heading: -Math.PI / 2, build, side, swing: 9, odo: 0.3 };
-  if (kind === 'drive') { look.build = { ...build, weapon: 'claw' }; }
-  drawBot(ctx, look, k, 0.15);
+  if (kind === 'drive') build.weapon = 'claw';
+  const k = size / 17;
+  if (kind === 'brain') {
+    // the computer doesn't change the look, so show a small robot and the computer's badge
+    drawBot(ctx, { x: 6.2, y: 10.5, heading: -Math.PI / 2, build, side, swing: 9, odo: 0.3 }, k * 0.8, 0.15);
+    drawBrainBadge(ctx, id, 11.6 * k, 6.6 * k, 4.6 * k);
+    return;
+  }
+  drawBot(ctx, { x: 8.5, y: 9.3, heading: -Math.PI / 2, build, side, swing: 9, odo: 0.3 }, k, 0.15);
+}
+
+/** A round badge for each computer: crossed swords, a shield, a curving arrow round the back, a map pin. */
+export function drawBrainBadge(ctx: CanvasRenderingContext2D, id: string, x: number, y: number, r: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.lineWidth = Math.max(1.5, r * 0.16); ctx.strokeStyle = INK; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const fill = { aggressive: '#ff7a59', conservative: '#7bd389', flanker: '#b39ddb', tactician: '#f2c94c' }[id] ?? '#fff';
+  ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.lineWidth = Math.max(1.2, r * 0.12);
+  const u = r / 10;
+  if (id === 'aggressive') {
+    // crossed swords
+    for (const s of [1, -1]) {
+      ctx.save(); ctx.rotate(s * Math.PI / 4);
+      ctx.beginPath(); ctx.rect(-1 * u, -7 * u, 2 * u, 10 * u); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.rect(-3 * u, 3 * u, 6 * u, 1.6 * u); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+  } else if (id === 'conservative') {
+    // a shield
+    ctx.beginPath(); ctx.moveTo(0, -6.5 * u); ctx.lineTo(5.5 * u, -4.5 * u); ctx.quadraticCurveTo(5.5 * u, 3.5 * u, 0, 7 * u); ctx.quadraticCurveTo(-5.5 * u, 3.5 * u, -5.5 * u, -4.5 * u); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -4 * u); ctx.lineTo(0, 4.5 * u); ctx.stroke();
+  } else if (id === 'flanker') {
+    // a dot (the enemy) and an arrow curling round behind it
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(0, -1.5 * u, 2.2 * u, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.2 * u;
+    ctx.beginPath(); ctx.arc(0, -1.5 * u, 5.5 * u, 0.9, Math.PI * 1.85); ctx.stroke();
+    const ax = Math.cos(Math.PI * 1.85) * 5.5 * u, ay = -1.5 * u + Math.sin(Math.PI * 1.85) * 5.5 * u;
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(ax + 3 * u, ay + 1 * u); ctx.lineTo(ax - 1.5 * u, ay - 2.5 * u); ctx.lineTo(ax - 1 * u, ay + 3 * u); ctx.closePath(); ctx.fill();
+  } else {
+    // a map pin on a little grid
+    ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1, u);
+    ctx.beginPath(); ctx.rect(-6 * u, -5 * u, 12 * u, 11 * u); ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -5 * u); ctx.lineTo(0, 6 * u); ctx.moveTo(-6 * u, 0.5 * u); ctx.lineTo(6 * u, 0.5 * u); ctx.stroke();
+    ctx.fillStyle = '#e5483b'; ctx.lineWidth = Math.max(1.2, 1.2 * u);
+    ctx.beginPath(); ctx.arc(2.5 * u, -3.5 * u, 3 * u, Math.PI, 0); ctx.lineTo(2.5 * u, 3 * u); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
 }

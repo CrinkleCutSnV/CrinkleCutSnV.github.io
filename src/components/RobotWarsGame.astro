@@ -124,9 +124,10 @@ const hint = (kind: PartKind, id: string): string => {
   .is-hidden { display: none !important; }
 
   /* ---- the workshop ---- */
-  .builder { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 1.2rem; align-items: start; }
+  .builder { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 1.2rem; align-items: start; }
   .preview-card { position: sticky; top: 1rem; background: #fff; border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: 6px 6px 0 var(--ink); padding: .9rem; display: grid; gap: .6rem; }
-  .preview { width: 100%; aspect-ratio: 1; border-radius: 12px; border: 2px solid var(--ink); background: #a9b4c2; }
+  .builder > *, .preview-card > *, .stage-wrap > * { min-width: 0; }
+  .preview { width: 100%; max-width: 100%; min-width: 0; aspect-ratio: 1; border-radius: 12px; border: 2px solid var(--ink); background: #a9b4c2; }
   .name-row { display: flex; align-items: center; gap: .4rem; }
   .name-label { font-weight: 800; font-size: .9rem; }
   .name { flex: 1; min-width: 0; font: inherit; font-weight: 800; font-size: 1.05rem; border: 2px solid var(--ink); border-radius: 10px; padding: .35rem .55rem; background: var(--paper); color: var(--ink); }
@@ -143,7 +144,7 @@ const hint = (kind: PartKind, id: string): string => {
   .opt { font: inherit; color: var(--ink); display: grid; justify-items: center; gap: .15rem; padding: .35rem .25rem .45rem; border: 2px solid var(--ink); border-radius: 14px; background: var(--paper); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform .1s; }
   .opt:hover { transform: translateY(-2px); }
   .opt[aria-checked='true'] { background: #d8f4fb; box-shadow: 3px 3px 0 var(--ink); outline: 3px solid var(--team0); outline-offset: -5px; }
-  .opt-icon { width: 64px; height: 64px; }
+  .opt-icon { width: 64px; height: 64px; max-width: 100%; }
   .opt-name { font-weight: 800; font-size: .86rem; line-height: 1.15; text-align: center; }
   .opt-hint { margin: .45rem 0 0; font-size: .86rem; line-height: 1.35; min-height: 2.4em; }
   .opt-hint :global(b) { display: block; font-weight: 800; color: #c2410c; }
@@ -218,11 +219,11 @@ const hint = (kind: PartKind, id: string): string => {
   .end-buttons { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; margin-top: .3rem; }
 
   @media (max-width: 860px) {
-    .builder { grid-template-columns: 1fr; gap: .9rem; }
-    .preview-card { position: static; grid-template-columns: 110px 1fr; align-items: center; gap: .45rem .8rem; padding: .7rem; }
+    .builder { grid-template-columns: minmax(0, 1fr); gap: .9rem; }
+    .preview-card { position: static; grid-template-columns: 110px minmax(0, 1fr); align-items: center; gap: .45rem .8rem; padding: .7rem; }
     .preview { grid-row: span 3; }
     .fight-row, .best-line { grid-column: 1 / -1; }
-    .stage-wrap { grid-template-columns: 1fr; gap: .7rem; }
+    .stage-wrap { grid-template-columns: minmax(0, 1fr); gap: .7rem; }
     .commentary { min-height: 0; padding: .45rem .7rem; }
     .log :global(li:nth-child(n + 4)) { display: none; }
   }
