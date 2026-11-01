@@ -23,13 +23,41 @@ export const ZONES: Record<ZoneId, { name: string; blurb: string }> = {
 };
 export const ZONE_IDS = Object.keys(ZONES) as ZoneId[];
 
-export interface Drive { name: string; blurb: string; speed: number; turn: number; accel: number; grip: number; fast: ZoneId; slow: ZoneId }
+/**
+ * How each drive handles. All rates are before the zone and body multipliers.
+ * - speed: straight-line top speed (units/s); accel: how quickly it gets there
+ * - pivot: turn rate on the spot (rad/s, standing still); pivotFade: forward speed at which that's gone
+ * - radius: tightest turning circle while moving (units); turnCap: fastest it can turn while moving (rad/s)
+ * - strafe: sideways speed (units/s, 0 = can't); strafeAccel: how crisply it side-steps
+ * - drift: how long its momentum takes to follow the controls (s); grip: how hard it is to shove
+ */
+export interface Drive {
+  name: string; blurb: string; handling: string;
+  speed: number; accel: number;
+  pivot: number; pivotFade: number; radius: number; turnCap: number;
+  strafe: number; strafeAccel: number; drift: number; grip: number;
+  fast: ZoneId; slow: ZoneId;
+}
 export const DRIVES: Record<DriveId, Drive> = {
-  wheels: { name: 'Wheels', blurb: 'Quick off the mark and nippy in the turns.', speed: 16.5, turn: 1.31, accel: 24, grip: 1, fast: 'steel', slow: 'sand' },
-  tracks: { name: 'Tracks', blurb: 'Grippy and hard to shove about.', speed: 15, turn: 1.31, accel: 20, grip: 1.25, fast: 'sand', slow: 'ice' },
-  legs: { name: 'Legs', blurb: 'Six stompy legs: turns on a sixpence.', speed: 13, turn: 1.18, accel: 22, grip: 1.1, fast: 'rubble', slow: 'steel' },
-  hover: { name: 'Hover', blurb: 'Floats on a cushion of air. Top speed, but drifty.', speed: 20, turn: 1.5, accel: 14, grip: 0.85, fast: 'ice', slow: 'rubble' },
+  wheels: {
+    name: 'Wheels', blurb: 'Four fat tyres: quick, and they carve lovely arcs.', handling: 'Can’t turn on the spot, so it swings round in curves or backs up to turn. Quick in a straight line.',
+    speed: 17, accel: 24, pivot: 0, pivotFade: 1, radius: 5.5, turnCap: 2.4, strafe: 0, strafeAccel: 0, drift: 0.08, grip: 1, fast: 'steel', slow: 'sand',
+  },
+  tracks: {
+    name: 'Tracks', blurb: 'Tank treads: grippy, strong and hard to shove about.', handling: 'Fastest in a straight line but turns in wide, lazy arcs. Stops and spins on the spot to line up.',
+    speed: 18.5, accel: 20, pivot: 2.5, pivotFade: 5, radius: 16, turnCap: 0.85, strafe: 0, strafeAccel: 0, drift: 0.04, grip: 1.25, fast: 'sand', slow: 'ice',
+  },
+  legs: {
+    name: 'Legs', blurb: 'Six stompy legs: turns on a sixpence.', handling: 'Slowest in a straight line, but spins on the spot, turns tightly and side-steps neatly.',
+    speed: 12.5, accel: 30, pivot: 3.6, pivotFade: 99, radius: 0, turnCap: 3.2, strafe: 8.5, strafeAccel: 40, drift: 0.03, grip: 1.1, fast: 'rubble', slow: 'steel',
+  },
+  hover: {
+    name: 'Hover', blurb: 'Floats on a cushion of air: smooth, but drifty.', handling: 'Middling at everything. Turns slowly on the spot, slides sideways and drifts on its momentum.',
+    speed: 15.5, accel: 16, pivot: 1.3, pivotFade: 99, radius: 7, turnCap: 1.6, strafe: 9, strafeAccel: 16, drift: 0.45, grip: 0.85, fast: 'ice', slow: 'rubble',
+  },
 };
+export const STRAFERS: DriveId[] = ['legs', 'hover'];
+export const canStrafe = (d: DriveId) => DRIVES[d].strafe > 0;
 
 export interface Weapon { name: string; blurb: string; damage: number; cooldown: number; reach: number; arc: number; strong: BodyId; weak: BodyId }
 export const WEAPONS: Record<WeaponId, Weapon> = {
@@ -131,7 +159,13 @@ export interface Bot {
   name: string;
   build: Build;
   x: number; y: number; heading: number;
-  speed: number; // forward, units/s
+  speed: number; // forward, units/s (what the drive is pushing for)
+  vs: number; // sideways, units/s (+ = to its left); only legs and hover can strafe
+  vx: number; vy: number; // where it's actually going (lags behind the drive: a hover drifts)
+  omega: number; // how fast it's turning, rad/s
+  odoL: number; odoR: number; // how far each side's tracks/wheels have rolled (for the animation)
+  gait: number; // legs: step phase
+  manoeuvre: string; // what the drive is doing: 'drive' | 'pivot' | 'reverse-turn' | 'strafe'
   kx: number; ky: number; // knockback velocity
   hp: number; maxHp: number;
   cd: number; // weapon cooldown left, s
@@ -178,7 +212,7 @@ function makeBot(side: 0 | 1, name: string, build: Build, L: Layout): Bot {
   const b = BODIES[build.body];
   const x = side === 0 ? 14 : ARENA - 14, y = ARENA / 2;
   return {
-    side, name, build, x, y, heading: side === 0 ? 0 : Math.PI, speed: 0, kx: 0, ky: 0,
+    side, name, build, x, y, heading: side === 0 ? 0 : Math.PI, speed: 0, vs: 0, vx: 0, vy: 0, omega: 0, odoL: 0, odoR: 0, gait: 0, manoeuvre: 'drive', kx: 0, ky: 0,
     hp: b.hp, maxHp: b.hp, cd: 0.6, stun: 0, flipped: 0, held: 0, swing: 9, recover: 0, dealt: 0, hits: 0, wait: 0, orbit: side === 0 ? 1 : -1, ram: 0, aggression: 0, seenX: side === 0 ? ARENA - 14 : 14, seenY: y, lost: 0,
     zone: zoneAt(L, x, y), mode: 'start',
   };
@@ -204,14 +238,27 @@ export function hitDir(tgt: Bot, att: Bot): HitDir {
 }
 
 /** The computer: where to drive, how hard, and whether it's fine to swing. */
-interface Goal { tx: number; ty: number; throttle: number; reverse?: boolean }
+interface Goal { tx: number; ty: number; throttle: number; reverse?: boolean; face?: boolean /* strafers: keep the nose on the enemy while moving */ }
 function brain(b: Battle, me: Bot, foe: Bot): Goal {
   const d = dist(me, foe);
   const toFoe = Math.atan2(foe.y - me.y, foe.x - me.x);
   const reach = WEAPONS[me.build.weapon].reach + BODIES[me.build.body].radius + BODIES[foe.build.body].radius;
-  const charge = (lead = 0.25) => ({ tx: foe.x + (foe.speed * Math.cos(foe.heading) + foe.kx) * lead, ty: foe.y + (foe.speed * Math.sin(foe.heading) + foe.ky) * lead, throttle: 1 });
+  const charge = (lead = 0.25) => ({ tx: foe.x + (foe.vx + foe.kx) * lead, ty: foe.y + (foe.vy + foe.ky) * lead, throttle: 1 });
+  const strafer = canStrafe(me.build.drive);
+  // legs and hover can circle sideways round them, nose on target
+  const sidestep = (ang: number, R: number, throttle = 1): Goal => ({ tx: clamp(foe.x + Math.cos(ang) * R, 7, ARENA - 7), ty: clamp(foe.y + Math.sin(ang) * R, 7, ARENA - 7), throttle, face: true });
   const late = b.t > TIME_LIMIT - 12 && me.dealt <= foe.dealt; // behind on points late on: go for it
   const helpless = foe.stun > 0.25;
+  const foeReach = WEAPONS[foe.build.weapon].reach + BODIES[foe.build.body].radius + BODIES[me.build.body].radius;
+  // where am I round them? 0 = dead ahead of them, ±π = right behind
+  const phi = wrap(Math.atan2(me.y - foe.y, me.x - foe.x) - foe.heading);
+  const sideOf = phi >= 0 ? 1 : -1;
+  const round = Math.atan2(me.y - foe.y, me.x - foe.x); // my bearing from them
+  // legs and hover hop sideways out of a swing that's coming their way, then slip round the side
+  if (strafer && !helpless && foe.stun <= 0 && Math.abs(phi) < 0.7 && d < foeReach + 3 && foe.cd < 0.25 && me.cd > 0.15 && me.build.brain !== 'tactician') {
+    me.mode = 'side-step';
+    return sidestep(round + sideOf * 0.9, Math.max(d, foeReach - 1));
+  }
   switch (me.build.brain) {
     case 'aggressive':
       me.mode = 'charge';
@@ -232,21 +279,24 @@ function brain(b: Battle, me: Bot, foe: Bot): Goal {
       if (d < keep) {
         let bx = me.x - Math.cos(toFoe) * 10 + Math.cos(toFoe + Math.PI / 2) * 6 * me.orbit, by = me.y - Math.sin(toFoe) * 10 + Math.sin(toFoe + Math.PI / 2) * 6 * me.orbit;
         if (bx < 10 || bx > ARENA - 10 || by < 10 || by > ARENA - 10) { me.orbit = (me.orbit * -1) as 1 | -1; bx = clamp(bx, 10, ARENA - 10); by = clamp(by, 10, ARENA - 10); }
+        if (strafer) return { tx: bx, ty: by, throttle: 0.8, face: true }; // backs and slides away, still facing them
         return { tx: bx, ty: by, throttle: 0.7, reverse: true };
+      }
+      if (strafer && d < keep + 12) {
+        // a slow sideways shuffle round them, keeping its distance and its nose on them
+        const g = sidestep(round + 0.5 * me.orbit, keep + 2, 0.45);
+        if (g.tx <= 7.5 || g.tx >= ARENA - 7.5 || g.ty <= 7.5 || g.ty >= ARENA - 7.5) me.orbit = (me.orbit * -1) as 1 | -1;
+        return g;
       }
       return { tx: foe.x, ty: foe.y, throttle: d > keep + 12 ? 0.4 : 0 };
     }
     case 'flanker': {
-      const foeReach = WEAPONS[foe.build.weapon].reach + BODIES[foe.build.body].radius + BODIES[me.build.body].radius;
-      // where am I round them? 0 = dead ahead of them, ±π = right behind
-      const phi = wrap(Math.atan2(me.y - foe.y, me.x - foe.x) - foe.heading);
-      const sideOf = phi >= 0 ? 1 : -1;
       // they're stuck or committed to a swing: nip round to their side and back
       if ((helpless || foe.recover > 0.1) && d < foeReach + 14 && me.cd < 0.4) {
         if (Math.abs(phi) > 1.4) { me.mode = 'strike'; return charge(0.1); }
         me.mode = 'round the back';
         const a2 = foe.heading + sideOf * 2.4, rr = reach * 0.75;
-        return { tx: clamp(foe.x + Math.cos(a2) * rr, 6, ARENA - 6), ty: clamp(foe.y + Math.sin(a2) * rr, 6, ARENA - 6), throttle: 1 };
+        return { tx: clamp(foe.x + Math.cos(a2) * rr, 6, ARENA - 6), ty: clamp(foe.y + Math.sin(a2) * rr, 6, ARENA - 6), throttle: 1, face: strafer };
       }
       if ((Math.abs(phi) > FLANK.angle && me.cd < 0.2) || late) { me.mode = 'strike'; return charge(0.2); }
       // nose to nose: back out (still facing them) rather than turn side-on
@@ -255,7 +305,7 @@ function brain(b: Battle, me: Bot, foe: Bot): Goal {
       if (d < foeReach + 1 && Math.abs(phi) < 1.0 && pinned) { me.mode = 'cornered'; return charge(0); }
       if (d < foeReach + 1 && Math.abs(phi) < 1.0) {
         me.mode = 'back off';
-        return { tx: clamp(me.x + Math.cos(s2) * 12, 7, ARENA - 7), ty: clamp(me.y + Math.sin(s2) * 12, 7, ARENA - 7), throttle: 1, reverse: true };
+        return { tx: clamp(me.x + Math.cos(s2) * 12, 7, ARENA - 7), ty: clamp(me.y + Math.sin(s2) * 12, 7, ARENA - 7), throttle: 1, reverse: !strafer, face: strafer };
       }
       // circle round them on the edge of their reach (baiting a swing), wider while reloading
       me.mode = me.cd > 0.2 ? 'back off' : 'circle';
@@ -268,7 +318,7 @@ function brain(b: Battle, me: Bot, foe: Bot): Goal {
         tx = foe.x + Math.cos(alt) * R; ty = foe.y + Math.sin(alt) * R;
       }
       // while reloading, back away still facing them rather than show them its back
-      return { tx: clamp(tx, 7, ARENA - 7), ty: clamp(ty, 7, ARENA - 7), throttle: 1, reverse: FLANK.backOff && me.cd > 0.2 && d < foeReach + 6 };
+      return { tx: clamp(tx, 7, ARENA - 7), ty: clamp(ty, 7, ARENA - 7), throttle: 1, reverse: !strafer && FLANK.backOff && me.cd > 0.2 && d < foeReach + 6, face: strafer };
     }
     case 'tactician': {
       // the best ground: fast for me, slow for them
@@ -324,17 +374,55 @@ function strike(b: Battle, me: Bot, foe: Bot) {
   switch (me.build.weapon) {
     case 'flipper': foe.kx += (ux * 26 * fx) / mass; foe.ky += (uy * 26 * fx) / mass; foe.heading = wrap(foe.heading + (b.r() < 0.5 ? -1 : 1) * (0.6 + 0.9 * b.r()) * fx); foe.stun = Math.max(foe.stun, 1.0 * fx); foe.flipped = 1.0 * fx; break;
     case 'spinner': foe.kx += (ux * 20 * fx) / mass; foe.ky += (uy * 20 * fx) / mass; foe.heading = wrap(foe.heading + (b.r() < 0.5 ? -1 : 1) * (0.5 + 0.8 * b.r()) * fx); me.kx -= ux * 12; me.ky -= uy * 12; foe.stun = Math.max(foe.stun, 0.25 * fx); break;
-    case 'hammer': foe.stun = Math.max(foe.stun, 0.6 * fx); foe.speed *= 0.2; break;
-    case 'claw': foe.stun = Math.max(foe.stun, 1.0 * fx); foe.held = 1.0 * fx; foe.speed = 0; break;
+    case 'hammer': foe.stun = Math.max(foe.stun, 0.6 * fx); foe.speed *= 0.2; foe.vs *= 0.2; foe.vx *= 0.2; foe.vy *= 0.2; break;
+    case 'claw': foe.stun = Math.max(foe.stun, 1.0 * fx); foe.held = 1.0 * fx; foe.speed = 0; foe.vs = 0; foe.vx = 0; foe.vy = 0; break;
   }
   b.events.push({ t: b.t, kind: 'hit', by: me.side, on: foe.side, dmg, dir, match: m, weapon: me.build.weapon, x: (me.x + foe.x) / 2, y: (me.y + foe.y) / 2 });
 }
 
-function move(b: Battle, me: Bot, foe: Bot) {
+// ---- the drives ----------------------------------------------------------------------------
+/** The fastest this bot can turn right now (rad/s): on the spot, or along its turning circle while moving. */
+export function turnLimit(me: Bot) {
+  const D = DRIVES[me.build.drive];
+  const v = Math.abs(me.speed);
+  const spot = D.pivot * clamp(1 - v / D.pivotFade, 0, 1);
+  const moving = D.radius > 0 ? Math.min(D.turnCap, v / D.radius) : D.turnCap;
+  return Math.max(spot, moving) * BODIES[me.build.body].turn * Math.sqrt(speedMul(me));
+}
+export const strafeSpeed = (me: Bot) => DRIVES[me.build.drive].strafe * BODIES[me.build.body].speed * speedMul(me);
+
+/** What the computer asks of the drive this step. */
+export interface Cmd { fwd: number; side: number; turn: number; turnMul?: number }
+/** Apply a command: turn (within its limits), push forwards/sideways, and let its momentum catch up. */
+export function driveStep(me: Bot, c: Cmd, ice = me.zone === 'ice') {
   const D = DRIVES[me.build.drive];
   const mul = speedMul(me);
+  const lim = turnLimit(me) * (c.turnMul ?? 1) * DT;
+  const dh = clamp(c.turn, -lim, lim);
+  me.heading = wrap(me.heading + dh);
+  me.omega = dh / DT;
+  const acc = D.accel * mul * DT;
+  me.speed += clamp(c.fwd - me.speed, -acc * 1.6, acc * 1.6);
+  const side = clamp(c.side, -strafeSpeed(me), strafeSpeed(me));
+  const sacc = D.strafeAccel * mul * DT;
+  me.vs += clamp(side - me.vs, -sacc, sacc);
+  const ch = Math.cos(me.heading), sh = Math.sin(me.heading);
+  const wx = ch * me.speed - sh * me.vs, wy = sh * me.speed + ch * me.vs;
+  // momentum: a hover takes a while to change direction (longer on ice); tracks bite at once
+  const tau = D.drift * (ice ? 2 : 1);
+  const f = 1 - Math.exp(-DT / Math.max(tau, 1e-3));
+  me.vx += (wx - me.vx) * f; me.vy += (wy - me.vy) * f;
+  // for the animation: each side's track/wheel rolls with forward speed ± the turn
+  const half = BODIES[me.build.body].radius;
+  me.odoL += (me.speed - me.omega * half) * DT; me.odoR += (me.speed + me.omega * half) * DT;
+  me.gait += (Math.abs(me.speed) + Math.abs(me.vs) * 1.3 + Math.abs(me.omega) * half) * DT;
+}
+
+function move(b: Battle, me: Bot, foe: Bot) {
+  const D = DRIVES[me.build.drive];
   if (me.stun > 0) {
-    me.speed *= Math.exp(-DT / 0.15);
+    me.speed *= Math.exp(-DT / 0.15); me.vs *= Math.exp(-DT / 0.15);
+    driveStep(me, { fwd: me.speed, side: me.vs, turn: 0 });
   } else {
     // it only knows where the enemy is while it's in the sensor cone, or close enough to bump into
     const outOfSight = Math.abs(wrap(Math.atan2(foe.y - me.y, foe.x - me.x) - me.heading)) > SENSOR && dist(me, foe) > BODIES[me.build.body].radius + BODIES[foe.build.body].radius + NEAR;
@@ -343,40 +431,73 @@ function move(b: Battle, me: Bot, foe: Bot) {
     const g = brain(b, me, view);
     // lost them and reached the spot it last saw them: look around (towards them, slowly)
     const searching = me.lost > 0 && Math.hypot(me.seenX - me.x, me.seenY - me.y) < 8;
-    const want = searching || g.reverse ? Math.atan2((searching ? foe : view).y - me.y, (searching ? foe : view).x - me.x) : Math.atan2(g.ty - me.y, g.tx - me.x);
-    const diff = wrap(want - me.heading);
-    // turning is harder flat out, so a charging bot overshoots
-    const turn = D.turn * BODIES[me.build.body].turn * mul * (1 - 0.45 * clamp(Math.abs(me.speed) / topSpeed(me), 0, 1)) * (me.recover > 0 ? 0.2 : 1) * (Math.abs(wrap(Math.atan2(foe.y - me.y, foe.x - me.x) - me.heading)) > SENSOR ? SEARCH_TURN : 1) * DT;
-    me.heading = wrap(me.heading + clamp(diff, -turn, turn));
-    let target: number;
-    if (g.reverse) {
-      const back = Math.cos(wrap(Math.atan2(g.ty - me.y, g.tx - me.x) - me.heading));
-      target = topSpeed(me) * g.throttle * Math.min(0, back) * 0.7;
+    const look = searching ? foe : view;
+    const toLook = Math.atan2(look.y - me.y, look.x - me.x);
+    const toGoal = Math.atan2(g.ty - me.y, g.tx - me.x);
+    const goalDist = Math.hypot(g.tx - me.x, g.ty - me.y);
+    const top = topSpeed(me);
+    const turnMul = (me.recover > 0 ? 0.2 : 1) * (Math.abs(wrap(Math.atan2(foe.y - me.y, foe.x - me.x) - me.heading)) > SENSOR ? SEARCH_TURN : 1);
+    let cmd: Cmd;
+    if (g.face && canStrafe(me.build.drive) && !searching) {
+      // strafe: nose on them, slide towards the goal (forwards, backwards or sideways)
+      const diff = wrap(toLook - me.heading);
+      const want = top * g.throttle * clamp(goalDist / 5, 0, 1);
+      const rel = wrap(toGoal - me.heading);
+      cmd = { fwd: clamp(Math.cos(rel) * want, -0.7 * top, top), side: Math.sin(rel) * want, turn: diff, turnMul };
+      me.manoeuvre = Math.abs(Math.sin(rel)) > 0.5 && want > 2 ? 'strafe' : 'drive';
+    } else if (g.reverse || g.face) {
+      // back away, still facing them
+      const diff = wrap(toLook - me.heading);
+      const back = Math.cos(wrap(toGoal - me.heading));
+      cmd = { fwd: top * g.throttle * Math.min(0, back) * 0.7, side: 0, turn: diff, turnMul };
+      me.manoeuvre = 'drive';
     } else {
+      const diff = wrap((searching ? toLook : toGoal) - me.heading);
       const align = Math.cos(diff);
-      target = topSpeed(me) * g.throttle * (align > 0 ? Math.max(0.2, align) : 0.15);
+      let fwd: number;
+      switch (me.build.drive) {
+        case 'tracks':
+          // too far off line: stop dead and spin on the spot, then go
+          if (me.manoeuvre === 'pivot' ? Math.abs(diff) > 0.2 : Math.abs(diff) > 0.65) { me.manoeuvre = 'pivot'; fwd = 0; }
+          else { me.manoeuvre = 'drive'; fwd = top * g.throttle * Math.max(0.3, align); }
+          break;
+        case 'wheels':
+          // can't turn standing still: keep rolling round an arc, or back up and swing the nose round
+          if (me.manoeuvre === 'reverse-turn' ? Math.abs(diff) > 1.2 : Math.abs(diff) > 2.1 && goalDist < 22) { me.manoeuvre = 'reverse-turn'; fwd = -0.55 * top; }
+          else { me.manoeuvre = 'drive'; fwd = top * Math.max(g.throttle, Math.abs(diff) > 0.15 ? 0.45 : 0) * Math.max(0.55, align); }
+          break;
+        case 'legs':
+          // turns first (it's quick at that), then walks
+          me.manoeuvre = Math.abs(diff) > 0.8 ? 'pivot' : 'drive';
+          fwd = top * g.throttle * (align > 0 ? Math.max(0.1, align * align) : 0);
+          break;
+        default:
+          me.manoeuvre = 'drive';
+          fwd = top * g.throttle * (align > 0 ? Math.max(0.25, align) : 0.15);
+      }
+      cmd = { fwd, side: 0, turn: diff, turnMul };
     }
-    const acc = D.accel * mul * DT;
-    me.speed += clamp(target - me.speed, -acc * 1.6, acc * 1.6);
+    driveStep(me, cmd);
     if (g.throttle > 0.9 && (me.mode === 'charge' || me.mode === 'pounce' || me.mode === 'strike' || me.mode === 'home fight' || me.mode === 'engage')) me.aggression += DT;
   }
+  void D;
   // a claw holds its victim in place, right in front of it
   if (me.held > 0) {
     const fx = foe.x + Math.cos(foe.heading) * (BODIES[foe.build.body].radius + BODIES[me.build.body].radius + 1);
     const fy = foe.y + Math.sin(foe.heading) * (BODIES[foe.build.body].radius + BODIES[me.build.body].radius + 1);
     me.x += (fx - me.x) * 0.2; me.y += (fy - me.y) * 0.2;
   }
-  me.x += (Math.cos(me.heading) * me.speed + me.kx) * DT;
-  me.y += (Math.sin(me.heading) * me.speed + me.ky) * DT;
+  me.x += (me.vx + me.kx) * DT;
+  me.y += (me.vy + me.ky) * DT;
   // knockback dies away (faster with grip; ice barely slows a hover)
   const slide = me.zone === 'ice' ? 0.55 : 0.28;
   const k = Math.exp(-DT / (slide / D.grip));
   me.kx *= k; me.ky *= k;
   const r = BODIES[me.build.body].radius;
-  if (me.x < r) { me.x = r; me.kx = Math.abs(me.kx) * 0.4; me.speed *= 0.5; }
-  if (me.x > ARENA - r) { me.x = ARENA - r; me.kx = -Math.abs(me.kx) * 0.4; me.speed *= 0.5; }
-  if (me.y < r) { me.y = r; me.ky = Math.abs(me.ky) * 0.4; me.speed *= 0.5; }
-  if (me.y > ARENA - r) { me.y = ARENA - r; me.ky = -Math.abs(me.ky) * 0.4; me.speed *= 0.5; }
+  if (me.x < r) { me.x = r; me.kx = Math.abs(me.kx) * 0.4; me.vx = Math.max(0, me.vx); me.speed *= 0.5; }
+  if (me.x > ARENA - r) { me.x = ARENA - r; me.kx = -Math.abs(me.kx) * 0.4; me.vx = Math.min(0, me.vx); me.speed *= 0.5; }
+  if (me.y < r) { me.y = r; me.ky = Math.abs(me.ky) * 0.4; me.vy = Math.max(0, me.vy); me.speed *= 0.5; }
+  if (me.y > ARENA - r) { me.y = ARENA - r; me.ky = -Math.abs(me.ky) * 0.4; me.vy = Math.min(0, me.vy); me.speed *= 0.5; }
   const z = zoneAt(b.layout, me.x, me.y);
   if (z !== me.zone) { me.zone = z; b.events.push({ t: b.t, kind: 'zone', by: me.side, zone: z }); }
 }
