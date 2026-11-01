@@ -96,7 +96,7 @@ const withMedals = gameScores.filter((g) => g.medals);
   import { allScoreKeys } from '../../data/scores';
   import type { ScoreFormat } from '../../data/scores';
   import { clearRecord, formatDate, readDate, readNumber, scoreName, vsPar, vsParWords } from '../../scripts/scores';
-  import { MEDAL_RULES, TIERS, TIER_NAME, tierRank } from '../../data/medals';
+  import { MEDAL_RULES, TIERS, TIER_NAME, ordinal, tierRank } from '../../data/medals';
   import { readMedal, readMedalDate } from '../../scripts/medals';
 
   function renderMedals() {
@@ -152,6 +152,9 @@ const withMedals = gameScores.filter((g) => g.medals);
         } else if (fmt.kind === 'metres') {
           value.textContent = `${v.toFixed(fmt.decimals ?? 1)} m`;
           if (extra) extra.textContent = '';
+        } else if (fmt.kind === 'place') {
+          value.textContent = `${ordinal(v)} of ${fmt.of}`;
+          if (extra) extra.textContent = headline ? (v === 1 ? 'Last robot standing!' : v <= 3 ? 'On the podium' : 'Still hunting for a podium') : '';
         } else if (fmt.kind === 'wins') {
           value.textContent = `${v} ${v === 1 ? 'win' : 'wins'}`;
           if (extra) extra.textContent = headline ? (v >= 3 ? 'Champion streak!' : v === 0 ? 'Still looking for a first win' : 'in a row') : '';

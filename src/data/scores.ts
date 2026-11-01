@@ -5,8 +5,8 @@
 //    all pick it up automatically.
 import { HOLES } from '../scripts/disc-golf/physics';
 import { BEST_KEY as SPLIT_BEST, CHARACTERS, bestKeyFor } from '../scripts/split-the-g/physics';
-import { DISC_GOLF_MEDALS, PLANE_MEDALS, ROBOT_MEDALS, SPLIT_MEDALS, type MedalRule } from './medals';
-import { BEST_STREAK_KEY } from '../scripts/robot-wars/keys';
+import { DISC_GOLF_MEDALS, MELEE_MEDALS, PLANE_MEDALS, ROBOT_MEDALS, SPLIT_MEDALS, type MedalRule } from './medals';
+import { BEST_STREAK_KEY, MELEE_BEST_KEY } from '../scripts/robot-wars/keys';
 
 export type ScoreFormat =
   | { kind: 'metres'; decimals?: number }
@@ -15,7 +15,9 @@ export type ScoreFormat =
   /** millimetres off a target: lower is better, 0 is perfect */
   | { kind: 'mm' }
   /** fights won in a row: higher is better */
-  | { kind: 'wins' };
+  | { kind: 'wins' }
+  /** a finishing place (1 = won): lower is better */
+  | { kind: 'place'; of: number };
 
 export interface ScoreStat {
   key: string; // localStorage key
@@ -95,6 +97,15 @@ export const gameScores: GameScores[] = [
     colour: '#a0c4ff',
     headline: { key: BEST_STREAK_KEY, label: 'Longest win streak (fights won in a row with one robot)', format: { kind: 'wins' } },
     medals: ROBOT_MEDALS,
+  },
+  {
+    slug: 'robot-melee',
+    title: 'Robot Rumble Melee',
+    icon: '/icons/robot-melee.svg',
+    emoji: '💥',
+    colour: '#ffadad',
+    headline: { key: MELEE_BEST_KEY, label: 'Best finish in a five-robot melee', format: { kind: 'place', of: 5 } },
+    medals: MELEE_MEDALS,
   },
 ];
 

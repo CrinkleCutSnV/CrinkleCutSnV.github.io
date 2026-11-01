@@ -48,4 +48,14 @@ export const apps: AppCard[] = [
     tags: ['Game', 'Autobattler', 'Canvas'],
     status: 'new',
   },
+  {
+    slug: 'robot-melee',
+    title: 'Robot Rumble Melee',
+    blurb: 'Five robots, one arena, no mercy. Build your fighter, throw it in with four random challengers and watch the free-for-all. Last robot standing takes gold; 2nd gets silver, 3rd bronze.',
+    emoji: '💥',
+    icon: '/icons/robot-melee.svg',
+    colour: '#ffadad',
+    tags: ['Game', 'Autobattler', 'Canvas'],
+    status: 'new',
+  },
 ];

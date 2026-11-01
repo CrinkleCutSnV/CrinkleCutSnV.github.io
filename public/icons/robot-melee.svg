@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" fill="none" stroke="#2b2d42" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+  <!-- the arena, seen from above, with five robots piling in -->
+  <rect x="6" y="6" width="108" height="78" rx="10" fill="#f2c94c" />
+  <rect x="13" y="13" width="94" height="64" rx="5" fill="#d3dbe4" />
+  <path d="M60 13v64M13 45h94" stroke="#7d8896" stroke-width="2.5" stroke-dasharray="5 4" />
+  <!-- the big bang in the middle -->
+  <path d="M60 30l4 9 9-3-5 8 8 5-10 1 1 9-7-6-6 7-1-9-9 1 6-7-7-6 9-1-1-9z" fill="#fff3a3" stroke-width="3" />
+  <!-- blue, orange, green, purple and yellow bots -->
+  <rect x="20" y="19" width="17" height="15" rx="4" fill="#48cae4" />
+  <path d="M37 26h6" stroke-width="4" />
+  <circle cx="92" cy="27" r="9" fill="#ff7a59" />
+  <path d="M84 33l-5 4" stroke-width="4" />
+  <path d="M18 70l9-17 9 17z" fill="#7bd389" />
+  <rect x="83" y="56" width="16" height="15" rx="4" fill="#b388eb" />
+  <path d="M83 58l-6-4" stroke-width="4" />
+  <circle cx="60" cy="69" r="6" fill="#f15bb5" />
+  <!-- sparks -->
+  <path d="M46 34l-5-5M74 34l5-6M48 56l-6 4" stroke="#ff7a59" stroke-width="3.5" />
+</svg>

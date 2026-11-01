@@ -196,4 +196,4 @@ function finishMelee(m: Melee, reason: 'ko' | 'points') {
 export function runMelee(m: Melee) { while (!m.over) stepMelee(m); return m; }
 
 /** For the end card: 1st, 2nd, 3rd… */
-export const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
+export { ordinal } from '../../data/medals';

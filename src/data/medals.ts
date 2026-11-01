@@ -17,7 +17,7 @@ export interface MedalRule {
   better: 'higher' | 'lower';
   /** the value needed for each medal */
   thresholds: Record<Tier, number>;
-  unit: 'm' | 'vsPar' | 'mm' | 'wins';
+  unit: 'm' | 'vsPar' | 'mm' | 'wins' | 'place';
 }
 
 export const PLANE_MEDALS: MedalRule = {
@@ -59,15 +59,28 @@ export const ROBOT_MEDALS: MedalRule = {
   unit: 'wins',
 };
 
-export const MEDAL_RULES: MedalRule[] = [PLANE_MEDALS, DISC_GOLF_MEDALS, SPLIT_MEDALS, ROBOT_MEDALS];
+export const MELEE_MEDALS: MedalRule = {
+  game: 'robot-melee',
+  key: 'crinklecut.robotMelee.medal',
+  measure: 'where your robot finishes in each five-robot melee',
+  better: 'lower',
+  // finishing place, at or better
+  thresholds: { bronze: 3, silver: 2, gold: 1 },
+  unit: 'place',
+};
+
+export const MEDAL_RULES: MedalRule[] = [PLANE_MEDALS, DISC_GOLF_MEDALS, SPLIT_MEDALS, ROBOT_MEDALS, MELEE_MEDALS];
 
 // ---- formatting --------------------------------------------------------------------
 export const fmtVsPar = (d: number) => (d === 0 ? 'E' : d > 0 ? `+${d}` : `−${-d}`);
-const fmtValue = (r: MedalRule, v: number) => (r.unit === 'm' ? `${v} m` : r.unit === 'mm' ? `${v} mm` : r.unit === 'wins' ? `${v} ${v === 1 ? 'win' : 'wins'}` : fmtVsPar(v));
+/** 1st, 2nd, 3rd, 4th... */
+export const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
+const fmtValue = (r: MedalRule, v: number) => (r.unit === 'm' ? `${v} m` : r.unit === 'mm' ? `${v} mm` : r.unit === 'wins' ? `${v} ${v === 1 ? 'win' : 'wins'}` : r.unit === 'place' ? `${ordinal(v)} place` : fmtVsPar(v));
 
 /** The band for a medal, e.g. "40–75 m", "100 m+", "+3 to +1", "−2 or better", "within 4 mm". */
 export function bandLabel(r: MedalRule, t: Tier): string {
   if (r.unit === 'mm') return `within ${fmtValue(r, r.thresholds[t])}`;
+  if (r.unit === 'place') return t === 'gold' ? 'Win the melee' : fmtValue(r, r.thresholds[t]);
   const i = TIERS.indexOf(t);
   if (r.unit === 'wins') return TIERS[i + 1] ? fmtValue(r, r.thresholds[t]) : `${fmtValue(r, r.thresholds[t]).replace(/ wins?$/, '')}+ wins`;
   const lo = r.thresholds[t];
@@ -91,6 +104,7 @@ export function nextTarget(r: MedalRule, v: number): string | null {
   const next = TIERS[won ? TIERS.indexOf(won) + 1 : 0];
   if (!next) return null;
   const goal = r.thresholds[next];
+  if (r.unit === 'place') return next === 'gold' ? 'win the melee for gold' : `finish ${ordinal(goal)} or better for ${next}`;
   if (r.unit === 'wins') { const gap = goal - v; return `${gap} more ${gap === 1 ? 'win' : 'wins'} in a row for ${next}`; }
   if (r.better === 'higher') {
     const gap = Math.max(0.1, Math.ceil((goal - v) * 10) / 10);

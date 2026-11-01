@@ -5,6 +5,10 @@ export const INK = '#2b2d42';
 export const TEAM = [
   { main: '#48cae4', dark: '#1b8fae', light: '#bdeffa', name: 'blue' },
   { main: '#ff7a59', dark: '#c94a2c', light: '#ffd3c6', name: 'orange' },
+  // the melee's other three
+  { main: '#7bd389', dark: '#3f9b52', light: '#d4f4da', name: 'green' },
+  { main: '#b388eb', dark: '#7a52b8', light: '#e9dcfa', name: 'purple' },
+  { main: '#f15bb5', dark: '#b52a7f', light: '#fbd3ea', name: 'pink' },
 ] as const;
 export const ZONE_COLOUR: Record<ZoneId, { base: string; dark: string; light: string; label: string }> = {
   steel: { base: '#a9b4c2', dark: '#7d8896', light: '#d3dbe4', label: '#3d4654' },
@@ -18,7 +22,7 @@ export const ZONE_EMOJI: Record<ZoneId, string> = { steel: '🔩', sand: '🏜�
 export interface BotLook {
   x: number; y: number; heading: number;
   build: Build;
-  side: 0 | 1;
+  side: number; // its colour: 0 = you (blue), 1 = orange, 2–4 = the melee's green, purple and pink
   speed?: number;
   swing?: number; // s since the weapon fired
   flipped?: number;
@@ -85,9 +89,9 @@ function texture(ctx: CanvasRenderingContext2D, z: ZoneId, x0: number, y0: numbe
 }
 const ZONE_IDS_ORDER: ZoneId[] = ['steel', 'sand', 'ice', 'rubble'];
 
-/** Draw the arena floor, walls and zone labels into a canvas `size` px square. */
-export function drawArena(ctx: CanvasRenderingContext2D, L: Layout, size: number, labels = true) {
-  const k = size / ARENA;
+/** Draw the arena floor, walls and zone labels into a canvas `size` px square (`units` across: 100 for a duel). */
+export function drawArena(ctx: CanvasRenderingContext2D, L: Layout, size: number, labels = true, units = ARENA) {
+  const k = size / units;
   const h = size / 2;
   L.forEach((z, i) => texture(ctx, z, (i % 2) * h, (i >= 2 ? 1 : 0) * h, h, h, k));
   // zone seams
@@ -426,7 +430,7 @@ function drawWeapon(ctx: CanvasRenderingContext2D, b: BotLook, r: number, k: num
 }
 
 /** A part on its own, for the builder buttons: the part on a plain grey robot, nose up-right. */
-export function drawPartIcon(ctx: CanvasRenderingContext2D, kind: keyof Build, id: string, size: number, side: 0 | 1 = 0) {
+export function drawPartIcon(ctx: CanvasRenderingContext2D, kind: keyof Build, id: string, size: number, side = 0) {
   ctx.clearRect(0, 0, size, size);
   const base: Build = { drive: 'wheels', weapon: 'flipper', body: 'box', brain: 'aggressive' };
   const build = { ...base, [kind]: id } as Build;

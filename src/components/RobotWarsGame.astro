@@ -14,8 +14,13 @@ const hint = (kind: PartKind, id: string): string => {
   }
   return '';
 };
+// 'duel' is Robot Rumble; 'melee' is Robot Rumble Melee. Both share the workshop.
+interface Props { mode?: 'duel' | 'melee' }
+const { mode = 'duel' } = Astro.props;
+const melee = mode === 'melee';
+const rootAttrs = melee ? { 'data-robot-melee': '' } : { 'data-robot-wars': '' };
 ---
-<div class="rr" data-robot-wars data-phase="build">
+<div class:list={['rr', { 'rr--melee': melee }]} {...rootAttrs} data-phase="build">
   <!-- the workshop -->
   <section class="builder" data-builder aria-label="Build your robot">
     <div class="preview-card">
@@ -27,10 +32,10 @@ const hint = (kind: PartKind, id: string): string => {
       </div>
       <p class="summary" data-summary></p>
       <div class="fight-row">
-        <button type="button" class="btn btn--big" data-fight>Fight! 🔧</button>
+        <button type="button" class="btn btn--big" data-fight>{melee ? 'Into the melee! 💥' : 'Fight! 🔧'}</button>
         <button type="button" class="btn btn--ghost btn--small" data-random title="Random parts">Surprise me 🎲</button>
       </div>
-      <p class="best-line" data-best-line>Best streak: –</p>
+      <p class="best-line" data-best-line>{melee ? 'Best finish: –' : 'Best streak: –'}</p>
     </div>
     <div class="parts">
       {kinds.map((kind) => (
@@ -53,6 +58,52 @@ const hint = (kind: PartKind, id: string): string => {
     </div>
   </section>
 
+{melee ? (
+  <!-- the arena -->
+  <section class="battle is-hidden" data-battle aria-label="The arena">
+    <div class="mhud">
+      <ol class="mbars" data-mbars aria-label="Health"></ol>
+      <div class="mid">
+        <span class="timer" data-timer>100</span>
+        <div class="speeds" role="group" aria-label="Battle speed">
+          <button type="button" class="spd is-on" data-speed="1" aria-pressed="true">1×</button>
+          <button type="button" class="spd" data-speed="2" aria-pressed="false">2×</button>
+          <button type="button" class="spd" data-speed="4" aria-pressed="false">4×</button>
+        </div>
+      </div>
+    </div>
+    <div class="stage-wrap">
+      <div class="stage">
+        <canvas class="arena" data-arena aria-label="The arena, seen from above"></canvas>
+        <div class="count is-hidden" data-count aria-live="assertive"></div>
+
+        <div class="overlay is-hidden" data-intro role="dialog" aria-live="polite" aria-label="Tonight’s line-up">
+          <div class="card intro-card">
+            <p class="kicker">Five robots · one arena · no mercy</p>
+            <ol class="lineup" data-lineup></ol>
+            <div class="intro-map"><canvas data-intro-map aria-hidden="true"></canvas><ul class="intro-notes" data-intro-notes></ul></div>
+            <button type="button" class="btn btn--big" data-go>Activate! ⚡</button>
+          </div>
+        </div>
+
+        <div class="overlay is-hidden" data-end role="dialog" aria-live="polite" aria-label="Final standings">
+          <div class="card end-card">
+            <p class="end-title" data-end-title></p>
+            <p class="end-how" data-end-how></p>
+            <table class="standings" data-standings></table>
+            <p class="end-streak" data-end-best></p>
+            <div data-end-medal></div>
+            <div class="end-buttons" data-end-buttons></div>
+          </div>
+        </div>
+      </div>
+      <div class="commentary">
+        <p class="comm-h">🎙️ Commentary</p>
+        <ol class="log" data-log aria-live="polite"></ol>
+      </div>
+    </div>
+  </section>
+) : (
   <!-- the arena -->
   <section class="battle is-hidden" data-battle aria-label="The arena">
     <div class="hud">
@@ -108,11 +159,14 @@ const hint = (kind: PartKind, id: string): string => {
       </div>
     </div>
   </section>
+)}
 </div>
 
 <script>
   import { initRobotWars } from '../scripts/robot-wars/game';
   document.querySelectorAll<HTMLElement>('[data-robot-wars]').forEach((el) => initRobotWars(el));
+  const melees = document.querySelectorAll<HTMLElement>('[data-robot-melee]');
+  if (melees.length) import('../scripts/robot-wars/melee-game').then(({ initRobotMelee }) => melees.forEach((el) => initRobotMelee(el)));
 </script>
 
 <style>
@@ -189,6 +243,9 @@ const hint = (kind: PartKind, id: string): string => {
   .log :global(.t) { font-variant-numeric: tabular-nums; font-weight: 800; opacity: .6; margin-right: .3em; font-size: .8em; }
   .log :global(.c0) { color: #1b8fae; font-weight: 800; }
   .log :global(.c1) { color: #c94a2c; font-weight: 800; }
+  .log :global(.c2) { color: #2f8a46; font-weight: 800; }
+  .log :global(.c3) { color: #7a52b8; font-weight: 800; }
+  .log :global(.c4) { color: #b52a7f; font-weight: 800; }
   @keyframes logpop { from { transform: translateX(-8px); opacity: 0; } }
 
   .overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: .8rem; background: rgba(43, 45, 66, .35); }
@@ -219,6 +276,43 @@ const hint = (kind: PartKind, id: string): string => {
   .end-streak { font-weight: 900; font-size: 1.05rem; margin: .5rem 0 .5rem !important; }
   .end-streak :global(.new) { display: inline-block; background: var(--sun); border: 2px solid var(--ink); border-radius: 999px; padding: 0 .5rem; transform: rotate(-3deg); font-size: .85rem; margin-left: .3rem; }
   .end-buttons { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; margin-top: .3rem; }
+
+  /* ---- the melee ---- */
+  .rr--melee .stage { max-width: 680px; }
+  .mhud { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; align-items: center; margin-bottom: .6rem; }
+  .mbars { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .4rem; }
+  .mbars :global(.mb) { position: relative; background: #fff; border: 3px solid var(--ink); border-radius: 12px; padding: .25rem .45rem .35rem; box-shadow: 3px 3px 0 var(--ink); min-width: 0; transition: opacity .3s; }
+  .mbars :global(.mb--you) { background: #e3f7fc; outline: 3px solid var(--c); outline-offset: 1px; }
+  .mbars :global(.mb-top) { display: flex; align-items: center; gap: .25rem; min-width: 0; }
+  .mbars :global(.mb-name) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .82rem; flex: 1; min-width: 0; }
+  .mbars :global(.mb-ko) { font-size: .65rem; white-space: nowrap; }
+  .mbars :global(.bar) { display: block; height: 10px; border: 2px solid var(--ink); border-radius: 999px; background: #eee; overflow: hidden; margin-top: .2rem; }
+  .mbars :global(.bar span) { display: block; height: 100%; width: 100%; background: #3ccf7a; transition: width .2s, background-color .2s; }
+  .mbars :global(.bar span[data-low='mid']) { background: var(--sun); }
+  .mbars :global(.bar span[data-low='low']) { background: #e5483b; }
+  .mbars :global(.mb-out) { position: absolute; right: .3rem; bottom: -.55rem; font-size: .7rem; font-weight: 900; background: var(--ink); color: #fff; border-radius: 999px; padding: 0 .35rem; line-height: 1.35; }
+  .mbars :global(.mb-out:empty) { display: none; }
+  .mbars :global(.mb.is-out) { opacity: .55; }
+  .mbars :global(.mb.is-out .mb-name) { text-decoration: line-through; }
+  .rr :global(.mb-dot) { display: inline-block; flex: none; width: .7em; height: .7em; border-radius: 50%; background: var(--c); border: 2px solid var(--ink); margin-right: .25em; vertical-align: -.05em; }
+  .lineup { list-style: none; margin: .4rem 0 .55rem; padding: 0; display: grid; gap: .3rem; text-align: left; }
+  .lineup :global(.lu) { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: .5rem; align-items: center; background: #fff; border: 2px solid var(--ink); border-left: 8px solid var(--c); border-radius: 10px; padding: .15rem .45rem .15rem .25rem; }
+  .lineup :global(.lu canvas) { width: 46px; height: 46px; }
+  .lineup :global(.lu-text) { display: grid; min-width: 0; line-height: 1.2; }
+  .lineup :global(.lu-text strong) { font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lineup :global(.lu-text small) { font-size: .74rem; opacity: .85; }
+  .lineup :global(.lu-note) { font-weight: 800; opacity: 1 !important; }
+  .lineup :global(.good) { color: #1f8a4c; }
+  .lineup :global(.bad) { color: #c0392b; }
+  .lineup :global(.you) { color: #1b8fae; }
+  .rr--melee .intro-card, .rr--melee .end-card { width: min(470px, 100%); }
+  .end-card[data-place='2'] .end-title, .end-card[data-place='3'] .end-title { color: #b45309; }
+  .end-card[data-place='4'] .end-title, .end-card[data-place='5'] .end-title { color: #c0392b; }
+  .standings { width: 100%; border-collapse: collapse; margin: .5rem 0 .2rem; font-size: .88rem; background: #fff; border: 2px solid var(--ink); font-variant-numeric: tabular-nums; }
+  .standings :global(th) { background: var(--sun); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; padding: .2rem .35rem; border-bottom: 2px solid var(--ink); }
+  .standings :global(td) { padding: .2rem .35rem; border-top: 1px solid rgba(43, 45, 66, .2); white-space: nowrap; }
+  .standings :global(td.st-name) { text-align: left; overflow: hidden; text-overflow: ellipsis; max-width: 12rem; font-weight: 700; }
+  .standings :global(tr.is-you) { background: #e3f7fc; font-weight: 900; }
 
   @media (max-width: 860px) {
     .builder { grid-template-columns: minmax(0, 1fr); gap: .9rem; }
@@ -252,5 +346,32 @@ const hint = (kind: PartKind, id: string): string => {
     .rr :global(.btn--big) { font-size: 1.05rem; }
     .end-buttons :global(.btn) { font-size: .9rem; padding: .4rem .85rem; }
     .stage { border-width: 2px; box-shadow: 4px 4px 0 var(--ink); }
+    .mhud { grid-template-columns: minmax(0, 1fr); gap: .35rem; }
+    .mhud .mid { grid-row: 1; grid-auto-flow: column; justify-content: center; align-items: center; gap: .6rem; }
+    .mbars { gap: .25rem; }
+    .mbars :global(.mb) { border-width: 2px; border-radius: 9px; padding: .15rem .25rem .25rem; box-shadow: 2px 2px 0 var(--ink); }
+    .mbars :global(.mb--you) { outline-width: 2px; }
+    .mbars :global(.mb-name) { font-size: .66rem; }
+    .mbars :global(.mb-dot) { display: none; }
+    .mbars :global(.mb-ko) { display: none; }
+    .mbars :global(.bar) { height: 8px; border-width: 1.5px; margin-top: .12rem; }
+    .mbars :global(.mb-out) { font-size: .6rem; right: .15rem; bottom: -.5rem; }
+    .rr--melee .overlay { padding: .35rem; }
+    .rr--melee .card { padding: .45rem .5rem .55rem; }
+    .lineup { gap: .18rem; margin: .25rem 0 .35rem; }
+    .lineup :global(.lu) { grid-template-columns: 30px minmax(0, 1fr); gap: .3rem; border-left-width: 6px; padding: .05rem .3rem .05rem .15rem; }
+    .lineup :global(.lu canvas) { width: 30px; height: 30px; }
+    .lineup :global(.lu-text strong) { font-size: .78rem; }
+    .lineup :global(.lu-text small) { font-size: .64rem; }
+    .lineup :global(.lu-text small:not(.lu-note)) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rr--melee .intro-map { display: none; }
+    .rr--melee .kicker { font-size: .66rem; }
+    .rr--melee .end-title { font-size: 1.3rem; }
+    .rr--melee .end-how { font-size: .8rem; }
+    .standings { font-size: .74rem; margin: .3rem 0 .1rem; }
+    .standings :global(th) { font-size: .6rem; padding: .1rem .25rem; }
+    .standings :global(td) { padding: .1rem .25rem; }
+    .standings :global(td.st-name) { max-width: 8rem; }
+    .rr--melee .end-streak { font-size: .85rem; margin: .25rem 0 !important; }
   }
 </style>
