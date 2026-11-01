@@ -16,7 +16,9 @@
     "check:split": "esbuild scripts/split-sim.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/split-sim.mjs --format=esm && node node_modules/.cache/split-sim.mjs",
     "test:split": "npm run check:split && node scripts/split-tests.mjs && node scripts/split-pov-tests.mjs && node scripts/split-hat-tests.mjs && node scripts/split-empty-tests.mjs",
     "check:robots": "esbuild scripts/robots-sim.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/robots-sim.mjs --format=esm && node node_modules/.cache/robots-sim.mjs",
-    "test:robots": "node scripts/robots-tests.mjs"
+    "test:robots": "node scripts/robots-tests.mjs",
+    "check:melee": "esbuild scripts/melee-sim.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/melee-sim.mjs --format=esm && node node_modules/.cache/melee-sim.mjs",
+    "test:melee": "node scripts/melee-tests.mjs"
   },
   "dependencies": {
     "astro": "^5.18.2",
