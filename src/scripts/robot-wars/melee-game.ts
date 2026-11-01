@@ -1,7 +1,9 @@
 // Robot Rumble Melee: the workshop (shared with Robot Rumble), the five-robot fight, the commentary and the standings.
 import { BODIES, DRIVES, PARTS, WEAPONS, ZONES, matchup, rng, type BattleEvent, type Layout, type PartKind } from './sim';
 import { MELEE_SIZE, challengers, createMelee, ordinal, stepMelee, alive, type Entrant, type Melee } from './melee';
-import { TEAM, ZONE_EMOJI, drawArena, drawBot, type BotLook } from './draw';
+import { TEAM, ZONE_EMOJI, drawBot, type BotLook } from './draw';
+import { drawMeleeMap } from './melee-draw';
+import { lineOfSight, nearestWall } from './map';
 import { MELEE_BEST_KEY } from './keys';
 import { esc, initWorkshop, sizeCanvas } from './workshop';
 import { Commentary, Fx, nameTag, pickOne, teamRing } from './fx';
@@ -77,7 +79,7 @@ export function initRobotMelee(root: HTMLElement) {
       drawBot(cx, { x: 11, y: 11, heading: -Math.PI / 2 - 0.35, build: b.build, side: b.side, swing: 9, odo: 0.3 }, s / 22, 0.2);
     }
     const mapS = sizeCanvas(ui.introMap), mc = ui.introMap.getContext('2d')!;
-    drawArena(mc, m.layout, mapS, false);
+    drawMeleeMap(mc, m.layout, mapS, false);
     mc.font = `${Math.round(mapS / 6)}px system-ui, sans-serif`; mc.textAlign = 'center'; mc.textBaseline = 'middle';
     m.layout.forEach((z, i) => mc.fillText(ZONE_EMOJI[z], ((i % 2) + 0.5) * mapS / 2, ((i >= 2 ? 1 : 0) + 0.5) * mapS / 2));
     const D = DRIVES[me.build.drive];
@@ -146,6 +148,11 @@ export function initRobotMelee(root: HTMLElement) {
         comm.say(line + tail + you, e.t, true);
         break;
       }
+      case 'wall':
+        comm.say(e.by >= 0
+          ? pickOne([`${A} slams ${B} into the wall!`, `<b>Crunch!</b> ${A} pins ${B} against the wall.`, `${B} meets the wall, courtesy of ${A}.`])
+          : pickOne([`${B} bounces off the wall.`, `${B} clatters into a wall.`]), e.t);
+        break;
       case 'time': comm.say(`<b>Time!</b> ${left} still standing: it goes to health left…`, e.t, true); break;
       case 'winner':
         comm.say(m.reason === 'ko' ? `<b>${A} is the last robot standing!</b> 🏆` : `<b>${A} wins on health left!</b> 🏆`, e.t, true);
@@ -164,7 +171,7 @@ export function initRobotMelee(root: HTMLElement) {
     if (cacheKey !== key) {
       arenaCache = document.createElement('canvas');
       arenaCache.width = arenaCache.height = s;
-      drawArena(arenaCache.getContext('2d')!, m.layout, s, true, m.size);
+      drawMeleeMap(arenaCache.getContext('2d')!, m.layout, s, true);
       cacheKey = key;
     }
     ctx.save();
@@ -179,7 +186,7 @@ export function initRobotMelee(root: HTMLElement) {
       const b = m.bots[i], w = m.wreck[i];
       const dragging = Math.hypot(w.x - b.x, w.y - b.y) > 0.3;
       if (dragging) {
-        // the arena's tow hook hauls it off to the wall
+        // the arena's tow hook hauls it off to the nearest wall
         const ex = w.x + Math.sign(w.x - b.x || 0) * 3, ey = w.y + Math.sign(w.y - b.y || 0) * 3;
         ctx.strokeStyle = '#2b2d42'; ctx.lineWidth = Math.max(2, 0.5 * k); ctx.setLineDash([0.9 * k, 0.6 * k]);
         ctx.beginPath(); ctx.moveTo(ex * k, ey * k); ctx.lineTo(b.x * k, b.y * k); ctx.stroke(); ctx.setLineDash([]);
@@ -294,6 +301,8 @@ export function initRobotMelee(root: HTMLElement) {
       winner: melee?.winner ?? null, place: melee ? [...melee.place] : null, left: melee ? alive(melee).length : 0, kos: melee ? [...melee.kos] : null,
       hp: melee?.bots.map((b) => b.hp), pos: melee?.bots.map((b) => [b.x, b.y]), target: melee ? [...melee.target] : null, names: melee?.bots.map((b) => b.name),
       builds: melee?.bots.map((b) => ({ ...b.build })), events: melee?.events.length ?? 0, kos_events: melee?.events.filter((e) => e.kind === 'ko').map((e) => ({ by: e.by, on: e.on, left: e.left, t: e.t })) ?? [], log: ui.log.children.length,
+      wall: melee?.bots.map((b) => nearestWall(b.x, b.y).d), slams: melee?.events.filter((e) => e.kind === 'wall').length ?? 0,
+      sees: melee?.bots.map((b) => melee!.bots.map((o) => lineOfSight(b, o))),
     }),
     pick: (kind: PartKind, id: string) => shop.pick(kind, id),
     setName: (n: string) => shop.setName(n),

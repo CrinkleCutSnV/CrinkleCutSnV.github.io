@@ -17,7 +17,15 @@ const sp = { fast: `🚀 ×${SPEED.fast}`, slow: `🐌 ×${SPEED.slow}`, medium:
     <RobotWarsGame mode="melee" />
     <details class="how">
       <summary>How it works</summary>
-      <p>{MELEE_BOTS} robots start round the edge of a bigger arena split into four zones, shuffled every melee. They’re all fully autonomous: your choices are all made in the workshop. A melee lasts up to {MELEE_LIMIT} seconds. Placings go by who gets knocked out when: the first robot out finishes 5th, the next 4th, and so on. If the clock runs out, the robots still standing are ranked by how much health they have left. Knocked-out robots are towed to the wall, still smoking. Each knockout is credited to whoever landed the last blow. You can watch at 1×, 2× or 4×.</p>
+      <p>{MELEE_BOTS} robots start spread evenly round a big arena, turned to a new spot every melee. They’re all fully autonomous: your choices are all made in the workshop. A melee lasts up to {MELEE_LIMIT} seconds. Placings go by who gets knocked out when: the first robot out finishes 5th, the next 4th, and so on. If the clock runs out, the robots still standing are ranked by how much health they have left. Knocked-out robots are towed to the nearest wall, still smoking. Each knockout is credited to whoever landed the last blow. You can watch at 1×, 2× or 4×.</p>
+
+      <h3>The arena</h3>
+      <p>Four zones of different ground (shuffled every melee) round a neutral paved plaza in the middle, which is the same for every drive. Walls split the zones from each other, so the only ways between them are a doorway through each wall or the plaza’s open corners. Each zone also has two pillars to hide behind.</p>
+      <ul>
+        <li><b>Walls and pillars are solid.</b> Robots slide along them, and nobody can see or swing through them.</li>
+        <li><b>Being slammed into a wall hurts</b> (a few points, credited to whoever sent you flying). Flippers and hammers are best at it: a hammer blow knocks its victim back too.</li>
+        <li>Every robot finds its own way round the walls. Flankers take the long way round to come at you from behind, and tacticians lie in wait at the way into the zone that suits them.</li>
+      </ul>
 
       <h3>Who picks on whom</h3>
       <p>Every robot keeps choosing a target, and its computer decides how. Nobody is out to get you in particular: the robots treat each other exactly as they treat you, and they don’t like ganging up on a robot that’s already being chased.</p>

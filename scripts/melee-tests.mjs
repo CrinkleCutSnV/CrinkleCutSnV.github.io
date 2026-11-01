@@ -11,8 +11,8 @@ const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); if 
 const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined });
 
 const ME = { drive: 'legs', weapon: 'spinner', body: 'wedge', brain: 'tactician' };
-const FORCE = { seed: 281, layout: ['sand', 'steel', 'ice', 'rubble'] }; // you win by KO at ~46 s; all five are scrapping in the middle at ~18 s
-const MOMENT = 18.4;
+const FORCE = { seed: 110, layout: ['sand', 'steel', 'ice', 'rubble'] }; // you win by KO at ~39 s; all five are in a scrap at ~18.7 s
+const MOMENT = 18.7;
 
 async function run(label, ctxOpts) {
   const errors = [];
@@ -59,6 +59,10 @@ async function run(label, ctxOpts) {
   check(s.phase === 'fight' && s.t > 0, `${label}: countdown, then the fight starts (t=${s.t.toFixed(1)})`);
   await page.clock.runFor(1500);
   await page.locator('[data-battle]').screenshot({ path: `${OUT}/${PRE}-start-${dev}.png` });
+  await page.locator('.stage').screenshot({ path: `${OUT}/${PRE}-map-${dev}.png` });
+  s = await st();
+  check(s.wall.every((d) => d > 0.5), `${label}: nobody starts in a wall (${s.wall.map((d) => d.toFixed(1)).join(', ')} units clear)`);
+  check(s.sees.some((row, i) => row.some((v, j) => i !== j && !v)), `${label}: the walls block the view between some robots`);
   await noOverflow('fight');
 
   // --- busy mid-melee ---
@@ -80,15 +84,17 @@ async function run(label, ctxOpts) {
   const log = await page.locator('[data-log]').innerText();
   check(/is out!|KO!|is scrap!/.test(log) && /4 left!/.test(log), `${label}: KO commentary ("${log.split('\n').find((l) => /left!/.test(l))}")`);
   check(/5th/.test(await page.locator(`[data-mb="${ko.on}"]`).innerText()) && await page.locator(`[data-mb="${ko.on}"].is-out`).count() === 1, `${label}: the knocked-out robot's bar is greyed with its placing`);
-  const p0 = s.pos[ko.on];
+  const p0 = s.pos[ko.on], s0wall = s.wall[ko.on];
   await page.clock.runFor(1500);
   s = await st();
-  const p1 = s.pos[ko.on], wall = (p) => Math.min(p[0], p[1], 130 - p[0], 130 - p[1]);
-  check(wall(p1) < wall(p0) || wall(p1) < 12, `${label}: the wreck is towed towards the wall (${wall(p0).toFixed(1)} → ${wall(p1).toFixed(1)} from the wall)`);
+  const w0 = s0wall, w1 = s.wall[ko.on];
+  check(w1 < w0 || w1 < 6, `${label}: the wreck is towed to the nearest wall (${w0.toFixed(1)} → ${w1.toFixed(1)} units from it)`);
+  void p0;
 
   // --- the end ---
   for (let i = 0; i < 120 && (await st()).phase !== 'result'; i++) await page.clock.runFor(500);
   s = await st();
+  check(s.slams > 0, `${label}: robots get slammed into the walls (${s.slams} times)`);
   check(s.phase === 'result' && s.over && s.reason === 'ko', `${label}: the melee ends by knockout (${s.t.toFixed(1)} s)`);
   check(JSON.stringify([...s.place].sort()) === '[1,2,3,4,5]', `${label}: placings 1–5 (${s.place.join(',')})`);
   const order = s.kos_events.map((e) => s.place[e.on]);

@@ -42,7 +42,7 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
 const seeded = (s: number) => () => ((s = (s * 16807) % 2147483647) / 2147483647);
 
 // ---- the arena ---------------------------------------------------------------------------
-function texture(ctx: CanvasRenderingContext2D, z: ZoneId, x0: number, y0: number, w: number, h: number, k: number) {
+export function texture(ctx: CanvasRenderingContext2D, z: ZoneId, x0: number, y0: number, w: number, h: number, k: number) {
   const c = ZONE_COLOUR[z];
   ctx.fillStyle = c.base; ctx.fillRect(x0, y0, w, h);
   const r = seeded(17 + ZONE_IDS_ORDER.indexOf(z) * 101);

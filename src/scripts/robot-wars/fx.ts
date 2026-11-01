@@ -45,6 +45,11 @@ export class Fx {
       this.floaters.push({ x, y: y - 4, text: 'dodge!', life: 0.8, colour: '#ffffff', big: false });
     } else if (e.kind === 'miss') {
       this.floaters.push({ x, y: y - 4, text: 'whiff', life: 0.6, colour: 'rgba(255,255,255,.85)', big: false });
+    } else if (e.kind === 'wall') {
+      // the melee's walls: slammed into one
+      this.burst(x, y, 14, ['#ffffff', '#d3dbe4', '#8a8d9c', '#f2c94c'], 0.8);
+      this.floaters.push({ x, y: y - 3, text: `CRUNCH! −${Math.round(e.dmg ?? 0)}`, life: 1, colour: TEAM[e.on!]?.light ?? '#ffffff', big: false });
+      this.shake = Math.max(this.shake, 0.6);
     } else if (e.kind === 'ko') {
       const v = bots[e.on!];
       this.burst(v.x, v.y, 60, ['#ff9f43', '#e5483b', '#f2c94c', '#5c5f6e', '#2b2d42'], 1.4);
