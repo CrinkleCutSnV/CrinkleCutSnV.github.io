@@ -464,7 +464,7 @@ function move(b: Battle, me: Bot, foe: Bot) {
           break;
         case 'wheels':
           // can't turn standing still: keep rolling round an arc, or back up and swing the nose round
-          if (me.manoeuvre === 'reverse-turn' ? Math.abs(diff) > 1.2 : Math.abs(diff) > 2.1 && goalDist < 22) { me.manoeuvre = 'reverse-turn'; fwd = -0.55 * top; }
+          if (me.manoeuvre === 'reverse-turn' ? Math.abs(diff) > 1.2 : Math.abs(diff) > 1.7 && goalDist < 18) { me.manoeuvre = 'reverse-turn'; fwd = -0.55 * top; }
           else { me.manoeuvre = 'drive'; fwd = top * Math.max(g.throttle, Math.abs(diff) > 0.15 ? 0.45 : 0) * Math.max(0.55, align); }
           break;
         case 'legs':

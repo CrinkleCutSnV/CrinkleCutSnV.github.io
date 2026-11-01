@@ -450,7 +450,7 @@ export function initRobotWars(root: HTMLElement) {
 
   // for the tests and for poking about in the console
   (window as any).__robotWars = {
-    state: () => ({ phase, streak, fightNo, build: { ...build }, name, speed, best: best(), opponent: opp, t: battle?.t ?? 0, winner: battle?.winner ?? null, reason: battle?.reason ?? null, hp: battle?.bots.map((b) => b.hp), pos: battle?.bots.map((b) => [b.x, b.y]), events: battle?.events.length ?? 0, log: ui.log.children.length }),
+    state: () => ({ phase, streak, fightNo, build: { ...build }, name, speed, best: best(), opponent: opp, t: battle?.t ?? 0, winner: battle?.winner ?? null, reason: battle?.reason ?? null, hp: battle?.bots.map((b) => b.hp), pos: battle?.bots.map((b) => [b.x, b.y]), man: battle?.bots.map((b) => b.manoeuvre), events: battle?.events.length ?? 0, log: ui.log.children.length }),
     pick: (kind: PartKind, id: string) => { build = { ...build, [kind]: id } as Build; refreshBuilder(); },
     setName: (n: string) => { name = n; ui.name.value = n; save(); },
     force: (f: typeof forced) => { forced = f; },

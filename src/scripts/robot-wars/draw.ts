@@ -267,10 +267,15 @@ export function drawTrail(ctx: CanvasRenderingContext2D, drive: Build['drive'], 
   } else if (drive === 'legs') {
     for (const m of marks) {
       if (m.foot === undefined) continue;
-      ctx.globalAlpha = 0.4 * Math.max(0, 1 - m.age / life);
+      ctx.globalAlpha = 0.5 * Math.max(0, 1 - m.age / life);
       ctx.fillStyle = '#2b2d42';
+      // a little three-toed foot, pointing the way it faces
+      for (const dx of [-0.35, 0, 0.35]) {
+        const ox = m.x - Math.sin(m.h) * (1.5 * R * m.foot + dx) + Math.cos(m.h) * 0.3, oy = m.y + Math.cos(m.h) * (1.5 * R * m.foot + dx) + Math.sin(m.h) * 0.3;
+        ctx.beginPath(); ctx.arc(ox * k, oy * k, 0.28 * k, 0, 7); ctx.fill();
+      }
       const fx = m.x - Math.sin(m.h) * 1.5 * R * m.foot, fy = m.y + Math.cos(m.h) * 1.5 * R * m.foot;
-      ctx.beginPath(); ctx.ellipse(fx * k, fy * k, 0.55 * k, 0.4 * k, m.h, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(fx * k, fy * k, 0.5 * k, 0.4 * k, m.h, 0, 7); ctx.fill();
     }
   } else {
     for (let i = 0; i < marks.length; i += 3) {

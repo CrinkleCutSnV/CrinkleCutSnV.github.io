@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE_URL || 'http://localhost:4321';
 const OUT = process.env.OUT_DIR || '/workspace/plane-shots';
+const PRE = process.env.SHOT_PREFIX || 'robots';
 mkdirSync(OUT, { recursive: true });
 let failures = 0;
 const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) failures++; };
@@ -11,8 +12,8 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME || un
 
 const ME = { drive: 'hover', weapon: 'hammer', body: 'dome', brain: 'flanker' };
 const THEM = { drive: 'tracks', weapon: 'flipper', body: 'box', brain: 'aggressive' };
-const FORCE = { name: 'Kettle of Doom', build: THEM, layout: ['steel', 'ice', 'sand', 'rubble'], seed: 45 }; // a nail-biting KO win at ~35 s, with a hit mid-arena at 25.1 s
-const MOMENT = 25.12;
+const FORCE = { name: 'Kettle of Doom', build: THEM, layout: ['steel', 'ice', 'sand', 'rubble'], seed: 305 }; // a KO win at ~31 s; at 23.8 s the hover is sliding sideways while the tracks spin on the spot
+const MOMENT = 23.75;
 
 async function run(label, ctxOpts) {
   const errors = [];
@@ -38,13 +39,20 @@ async function run(label, ctxOpts) {
   check(JSON.stringify(s0.build) === JSON.stringify(ME), `${label}: clicking parts builds the robot (${Object.values(s0.build).join('/')})`);
   const hints = (await page.locator('.parts').innerText()).replace(/\s+/g, ' ');
   check(/Fast on ice/i.test(hints) && /Strong vs Dome · weak vs Open frame/.test(hints) && /fears hammer/.test(hints), `${label}: hints show terrain and matchups`);
+  check(/slides sideways and drifts/.test(hints), `${label}: the hover's handling is described`);
+  for (const [id, re] of [['wheels', /Can’t turn on the spot/], ['tracks', /wide, lazy arcs.*spins on the spot/], ['legs', /side-steps/]]) {
+    await page.locator(`[data-part="drive"][data-id="${id}"]`).click();
+    check(re.test(await page.locator('[data-hint-for="drive"]').innerText()), `${label}: ${id} handling is described`);
+    if (id === 'tracks') await page.locator('[data-kind="drive"]').screenshot({ path: `${OUT}/${PRE}-builder-tracks-${mobile ? 'mobile' : 'desktop'}.png` });
+  }
+  await page.locator('[data-part="drive"][data-id="hover"]').click();
   await page.locator('[data-name]').fill('Tin Lizzie');
   check((await st()).name === 'Tin Lizzie', `${label}: name box sets the name`);
   check(/Best streak: no wins yet/.test(await page.locator('[data-best-line]').innerText()), `${label}: best streak starts empty`);
   await page.clock.runFor(700);
   await noOverflow('workshop');
-  await game.screenshot({ path: `${OUT}/robots-builder-${mobile ? 'mobile' : 'desktop'}.png` });
-  if (mobile) await page.screenshot({ path: `${OUT}/robots-builder-mobile-top.png` });
+  await game.screenshot({ path: `${OUT}/${PRE}-builder-${mobile ? 'mobile' : 'desktop'}.png` });
+  if (mobile) await page.screenshot({ path: `${OUT}/${PRE}-builder-mobile-top.png` });
 
   // --- fight intro ---
   await page.evaluate((f) => window.__robotWars.force(f), FORCE);
@@ -55,7 +63,7 @@ async function run(label, ctxOpts) {
   check(/Kettle of Doom/.test(intro) && /Tin Lizzie/.test(intro) && /Fight 1/i.test(intro), `${label}: intro names both robots: "${intro.slice(0, 90)}…"`);
   check(/Your hammer is strong vs their box|Your hammer vs their box: even/.test(intro) && /Their flipper vs your dome: even/.test(intro), `${label}: intro spells out the matchups`);
   check(/fast on 🧊 \(top right\)/.test(intro), `${label}: intro shows where your fast ground is`);
-  await page.locator('[data-battle]').screenshot({ path: `${OUT}/robots-intro-${mobile ? 'mobile' : 'desktop'}.png` });
+  await page.locator('[data-battle]').screenshot({ path: `${OUT}/${PRE}-intro-${mobile ? 'mobile' : 'desktop'}.png` });
 
   // --- countdown and the fight at 1× then 2× ---
   await page.locator('[data-go]').click();
@@ -80,8 +88,9 @@ async function run(label, ctxOpts) {
   check(s.hp[0] < 155 && s.hp[1] < 155, `${label}: both robots have taken damage by ${s.t.toFixed(1)} s (${s.hp.map(Math.round).join(' / ')} HP)`);
   const hud = await page.locator('[data-hud-hp]').evaluateAll((els) => els.map((e) => parseFloat(e.style.width)));
   check(hud.every((w) => w > 0 && w < 100), `${label}: HP bars track damage (${hud.map(Math.round).join('% / ')}%)`);
+  check(s.man[0] === 'strafe' && s.man[1] === 'pivot', `${label}: mid-fight the hover is strafing and the tracks are pivoting (${s.man.join(' / ')})`);
   await noOverflow('arena');
-  await page.locator('[data-battle]').screenshot({ path: `${OUT}/robots-battle-${mobile ? 'mobile' : 'desktop'}.png` });
+  await page.locator('[data-battle]').screenshot({ path: `${OUT}/${PRE}-battle-${mobile ? 'mobile' : 'desktop'}.png` });
 
   // --- the result ---
   await page.clock.runFor(16000);
@@ -91,7 +100,7 @@ async function run(label, ctxOpts) {
   check(/Win streak: 1/.test(end) && /Next challenger/.test(end), `${label}: win card offers Next challenger: "${end.slice(0, 120)}…"`);
   check(await page.locator('[data-end] [data-medal="bronze"]').count() === 1, `${label}: first win earns bronze`);
   check(await page.evaluate(() => localStorage.getItem('crinklecut.robotWars.bestStreak')) === '1', `${label}: best streak saved`);
-  await page.locator('[data-battle]').screenshot({ path: `${OUT}/robots-result-${mobile ? 'mobile' : 'desktop'}.png` });
+  await page.locator('[data-battle]').screenshot({ path: `${OUT}/${PRE}-result-${mobile ? 'mobile' : 'desktop'}.png` });
 
   // --- a run: repaired between fights, a loss ends it ---
   await page.locator('[data-next]').click();
@@ -112,7 +121,7 @@ async function run(label, ctxOpts) {
   const tier = streak >= 3 ? 'gold' : streak === 2 ? 'silver' : 'bronze';
   check(await page.locator(`[data-end] [data-medal="${tier}"]`).count() === 1, `${label}: medal for a ${streak}-win run is ${tier}`);
   check(await page.evaluate(() => localStorage.getItem('crinklecut.robotWars.bestStreak')) === String(streak), `${label}: best streak is ${streak}`);
-  if (!mobile) await page.locator('[data-battle]').screenshot({ path: `${OUT}/robots-loss-desktop.png` });
+  if (!mobile) await page.locator('[data-battle]').screenshot({ path: `${OUT}/${PRE}-loss-desktop.png` });
   await page.locator('[data-again]').click();
   await page.clock.runFor(200);
   s = await st();
@@ -137,8 +146,32 @@ async function run(label, ctxOpts) {
   await ctx.close();
 }
 
+// legs v wheels: the legs side-step while the wheels back up and swing round
+async function drives(label, ctxOpts) {
+  const ctx = await browser.newContext(ctxOpts);
+  const page = await ctx.newPage();
+  await page.clock.install();
+  await page.goto(`${BASE}/apps/robot-wars/`);
+  await page.clock.runFor(300);
+  for (const [k, v] of Object.entries({ drive: 'legs', weapon: 'hammer', body: 'wedge', brain: 'flanker' })) await page.locator(`[data-part="${k}"][data-id="${v}"]`).click();
+  await page.evaluate(() => window.__robotWars.force({ name: 'Wheelie Bin of Woe', build: { drive: 'wheels', weapon: 'spinner', body: 'frame', brain: 'tactician' }, layout: ['steel', 'ice', 'sand', 'rubble'], seed: 11 }));
+  await page.locator('[data-fight]').click();
+  await page.clock.runFor(300);
+  await page.locator('[data-go]').click();
+  await page.clock.runFor(3400);
+  const st = () => page.evaluate(() => window.__robotWars.state());
+  let s = await st();
+  await page.clock.runFor(Math.round((5.05 - s.t) * 1000));
+  s = await st();
+  check(s.man[0] === 'strafe' && s.man[1] === 'reverse-turn', `${label}: legs side-step while the wheels back up and turn (${s.man.join(' / ')} at ${s.t.toFixed(2)} s)`);
+  await page.locator('[data-battle]').screenshot({ path: `${OUT}/${PRE}-legs-wheels-${label}.png` });
+  await ctx.close();
+}
+
 await run('desktop', { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 });
 await run('mobile', { ...devices['iPhone 13'] });
+await drives('desktop', { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 });
+await drives('mobile', { ...devices['iPhone 13'] });
 
 // the home page lists it
 {
