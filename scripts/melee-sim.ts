@@ -6,7 +6,7 @@ import { createMelee, runMelee, stepMelee, challengers, alive, MELEE_LIMIT, type
 import { randomBuild, rng, PART_IDS, PARTS, matchMul, matchup, type Build, type PartKind, type BrainId } from '../src/scripts/robot-wars/sim';
 
 const N = Number(process.env.MELEE_N ?? 120); // melees per build, ranking pass
-const FRESH = Number(process.env.MELEE_FRESH ?? 100); // fresh melees for each of the top-quarter builds
+const FRESH = Number(process.env.MELEE_FRESH ?? 100); // fresh melees for each of the top-fifth builds
 const AIM = 1600; // melees watched for who goes for whom
 const all: Build[] = [];
 for (const drive of PART_IDS.drive) for (const weapon of PART_IDS.weapon) for (const body of PART_IDS.body) for (const brain of PART_IDS.brain) all.push({ drive, weapon, body, brain });
@@ -117,12 +117,12 @@ async function main() {
   check(R.inTime / R.melees > 0.75, `most melees end with one robot standing inside ${MELEE_LIMIT} s (${pct(R.inTime / R.melees)}); the rest go to health left`);
   check(R.orderOk === R.melees, `placings follow the knockouts: the first out finishes 5th (${R.orderOk}/${R.melees})`);
 
-  // --- a sensible build: the top quarter of the ranking, scored on fresh melees (so lucky streaks don't flatter them) ---
-  const top = Object.entries(R.builds).sort((x, y) => y[1][0] + 0.5 * y[1][1] - (x[1][0] + 0.5 * x[1][1])).slice(0, 64).map(([k]) => k);
+  // --- a sensible build: the top fifth of the ranking (51 of 256 builds), scored on fresh melees (so lucky streaks don't flatter them) ---
+  const top = Object.entries(R.builds).sort((x, y) => y[1][0] + 0.5 * y[1][1] - (x[1][0] + 0.5 * x[1][1])).slice(0, 51).map(([k]) => k);
   const F = merge(await run('fresh', top));
   const sF = F.place[1] / F.melees, s3 = (F.place[1] + F.place[2] + F.place[3]) / F.melees;
-  check(sF >= 0.24 && sF <= 0.35, `a sensible build (top quarter, ${F.melees} fresh melees) finishes 1st ${pct(sF)} (about 25–35%): that’s gold`);
-  check(s3 >= 0.63 && s3 <= 0.75, `and on the podium (top 3) ${pct(s3)} (about 65–75%)`);
+  check(sF >= 0.25 && sF <= 0.35, `a sensible build (top fifth, ${F.melees} fresh melees) finishes 1st ${pct(sF)} (about 25–35%): that’s gold`);
+  check(s3 >= 0.65 && s3 <= 0.75, `and on the podium (top 3) ${pct(s3)} (about 65–75%)`);
   const bestFresh = Object.entries(F.builds).sort((x, y) => y[1][0] - x[1][0])[0];
   console.log(`  the best of them on fresh melees: ${bestFresh[0]} 1st ${pct(bestFresh[1][0])}, top 3 ${pct(bestFresh[1][1])}`);
   check(bestFresh[1][0] < 0.6, 'still none wins over 60%');
