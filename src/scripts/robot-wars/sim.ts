@@ -150,12 +150,13 @@ export function randomLayout(r: () => number): Layout {
   for (let i = z.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [z[i], z[j]] = [z[j], z[i]]; }
   return z as Layout;
 }
-export const zoneAt = (L: Layout, x: number, y: number): ZoneId => L[(y >= ARENA / 2 ? 2 : 0) + (x >= ARENA / 2 ? 1 : 0)];
-export const zoneCentre = (L: Layout, z: ZoneId) => { const i = L.indexOf(z); return { x: (i % 2 ? 0.75 : 0.25) * ARENA, y: (i >= 2 ? 0.75 : 0.25) * ARENA }; };
+/** `S` is the arena's size: 100 for a duel, roomier for the melee. */
+export const zoneAt = (L: Layout, x: number, y: number, S = ARENA): ZoneId => L[(y >= S / 2 ? 2 : 0) + (x >= S / 2 ? 1 : 0)];
+export const zoneCentre = (L: Layout, z: ZoneId, S = ARENA) => { const i = L.indexOf(z); return { x: (i % 2 ? 0.75 : 0.25) * S, y: (i >= 2 ? 0.75 : 0.25) * S }; };
 
 // ---- the battle ----------------------------------------------------------------------------
 export interface Bot {
-  side: 0 | 1;
+  side: number; // 0 = you, 1 = the challenger (0–4 in the melee): also its colour
   name: string;
   build: Build;
   x: number; y: number; heading: number;
@@ -184,12 +185,15 @@ export interface Bot {
   aggression: number; // s spent closing in (tie-break)
   zone: ZoneId;
   mode: string; // what the computer is up to, for the commentary and the tests
+  heldBy?: number; // who's holding it in a claw
+  lastBy?: number; lastByT?: number; // who last hurt it, and when (the melee credits KOs and grudges with this)
 }
 export interface BattleEvent {
   t: number;
-  kind: 'start' | 'hit' | 'dodge' | 'miss' | 'ram' | 'zone' | 'ko' | 'time' | 'opening' | 'judges';
-  by: 0 | 1;
-  on?: 0 | 1;
+  kind: 'start' | 'hit' | 'dodge' | 'miss' | 'ram' | 'zone' | 'ko' | 'time' | 'opening' | 'judges' | 'winner';
+  by: number; // -1 = nobody in particular
+  on?: number;
+  left?: number; // melee: robots still standing
   dmg?: number;
   dir?: HitDir;
   match?: Matchup;
@@ -199,16 +203,18 @@ export interface BattleEvent {
 }
 export interface Battle {
   t: number;
-  bots: [Bot, Bot];
+  bots: Bot[]; // [you, them] in a duel; five in the melee
   layout: Layout;
+  size: number; // the arena is size × size units
+  limit: number; // s
   r: () => number;
   events: BattleEvent[];
   over: boolean;
-  winner: 0 | 1 | null;
+  winner: number | null;
   reason: 'ko' | 'points' | 'judges' | null;
 }
 
-function makeBot(side: 0 | 1, name: string, build: Build, L: Layout): Bot {
+export function makeBot(side: number, name: string, build: Build, L: Layout): Bot {
   const b = BODIES[build.body];
   const x = side === 0 ? 14 : ARENA - 14, y = ARENA / 2;
   return {
@@ -222,7 +228,7 @@ export function createBattle(a: { name: string; build: Build }, b: { name: strin
   const r = rng(seed);
   const L = layout ?? randomLayout(r);
   const bots: [Bot, Bot] = [makeBot(0, a.name, a.build, L), makeBot(1, b.name, b.build, L)];
-  return { t: 0, bots, layout: L, r, events: [{ t: 0, kind: 'start', by: 0 }], over: false, winner: null, reason: null };
+  return { t: 0, bots, layout: L, size: ARENA, limit: TIME_LIMIT, r, events: [{ t: 0, kind: 'start', by: 0 }], over: false, winner: null, reason: null };
 }
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -240,14 +246,15 @@ export function hitDir(tgt: Bot, att: Bot): HitDir {
 /** The computer: where to drive, how hard, and whether it's fine to swing. */
 interface Goal { tx: number; ty: number; throttle: number; reverse?: boolean; face?: boolean /* strafers: keep the nose on the enemy while moving */ }
 function brain(b: Battle, me: Bot, foe: Bot): Goal {
+  const S = b.size;
   const d = dist(me, foe);
   const toFoe = Math.atan2(foe.y - me.y, foe.x - me.x);
   const reach = WEAPONS[me.build.weapon].reach + BODIES[me.build.body].radius + BODIES[foe.build.body].radius;
   const charge = (lead = 0.25) => ({ tx: foe.x + (foe.vx + foe.kx) * lead, ty: foe.y + (foe.vy + foe.ky) * lead, throttle: 1 });
   const strafer = canStrafe(me.build.drive);
   // legs and hover can circle sideways round them, nose on target
-  const sidestep = (ang: number, R: number, throttle = 1): Goal => ({ tx: clamp(foe.x + Math.cos(ang) * R, 7, ARENA - 7), ty: clamp(foe.y + Math.sin(ang) * R, 7, ARENA - 7), throttle, face: true });
-  const late = b.t > TIME_LIMIT - 12 && me.dealt <= foe.dealt; // behind on points late on: go for it
+  const sidestep = (ang: number, R: number, throttle = 1): Goal => ({ tx: clamp(foe.x + Math.cos(ang) * R, 7, S - 7), ty: clamp(foe.y + Math.sin(ang) * R, 7, S - 7), throttle, face: true });
+  const late = b.t > b.limit - 12 && me.dealt <= foe.dealt; // behind on points late on: go for it
   const helpless = foe.stun > 0.25;
   const foeReach = WEAPONS[foe.build.weapon].reach + BODIES[foe.build.body].radius + BODIES[me.build.body].radius;
   // where am I round them? 0 = dead ahead of them, ±π = right behind
@@ -278,14 +285,14 @@ function brain(b: Battle, me: Bot, foe: Bot): Goal {
       const keep = reach + 14;
       if (d < keep) {
         let bx = me.x - Math.cos(toFoe) * 10 + Math.cos(toFoe + Math.PI / 2) * 6 * me.orbit, by = me.y - Math.sin(toFoe) * 10 + Math.sin(toFoe + Math.PI / 2) * 6 * me.orbit;
-        if (bx < 10 || bx > ARENA - 10 || by < 10 || by > ARENA - 10) { me.orbit = (me.orbit * -1) as 1 | -1; bx = clamp(bx, 10, ARENA - 10); by = clamp(by, 10, ARENA - 10); }
+        if (bx < 10 || bx > S - 10 || by < 10 || by > S - 10) { me.orbit = (me.orbit * -1) as 1 | -1; bx = clamp(bx, 10, S - 10); by = clamp(by, 10, S - 10); }
         if (strafer) return { tx: bx, ty: by, throttle: 0.8, face: true }; // backs and slides away, still facing them
         return { tx: bx, ty: by, throttle: 0.7, reverse: true };
       }
       if (strafer && d < keep + 12) {
         // a slow sideways shuffle round them, keeping its distance and its nose on them
         const g = sidestep(round + 0.5 * me.orbit, keep + 2, 0.45);
-        if (g.tx <= 7.5 || g.tx >= ARENA - 7.5 || g.ty <= 7.5 || g.ty >= ARENA - 7.5) me.orbit = (me.orbit * -1) as 1 | -1;
+        if (g.tx <= 7.5 || g.tx >= S - 7.5 || g.ty <= 7.5 || g.ty >= S - 7.5) me.orbit = (me.orbit * -1) as 1 | -1;
         return g;
       }
       return { tx: foe.x, ty: foe.y, throttle: d > keep + 12 ? 0.4 : 0 };
@@ -296,16 +303,16 @@ function brain(b: Battle, me: Bot, foe: Bot): Goal {
         if (Math.abs(phi) > 1.4) { me.mode = 'strike'; return charge(0.1); }
         me.mode = 'round the back';
         const a2 = foe.heading + sideOf * 2.4, rr = reach * 0.75;
-        return { tx: clamp(foe.x + Math.cos(a2) * rr, 6, ARENA - 6), ty: clamp(foe.y + Math.sin(a2) * rr, 6, ARENA - 6), throttle: 1, face: strafer };
+        return { tx: clamp(foe.x + Math.cos(a2) * rr, 6, S - 6), ty: clamp(foe.y + Math.sin(a2) * rr, 6, S - 6), throttle: 1, face: strafer };
       }
       if ((Math.abs(phi) > FLANK.angle && me.cd < 0.2) || late) { me.mode = 'strike'; return charge(0.2); }
       // nose to nose: back out (still facing them) rather than turn side-on
       const s2 = Math.atan2(me.y - foe.y, me.x - foe.x) + 0.6 * sideOf;
-      const pinned = me.x + Math.cos(s2) * 12 < 8 || me.x + Math.cos(s2) * 12 > ARENA - 8 || me.y + Math.sin(s2) * 12 < 8 || me.y + Math.sin(s2) * 12 > ARENA - 8;
+      const pinned = me.x + Math.cos(s2) * 12 < 8 || me.x + Math.cos(s2) * 12 > S - 8 || me.y + Math.sin(s2) * 12 < 8 || me.y + Math.sin(s2) * 12 > S - 8;
       if (d < foeReach + 1 && Math.abs(phi) < 1.0 && pinned) { me.mode = 'cornered'; return charge(0); }
       if (d < foeReach + 1 && Math.abs(phi) < 1.0) {
         me.mode = 'back off';
-        return { tx: clamp(me.x + Math.cos(s2) * 12, 7, ARENA - 7), ty: clamp(me.y + Math.sin(s2) * 12, 7, ARENA - 7), throttle: 1, reverse: !strafer, face: strafer };
+        return { tx: clamp(me.x + Math.cos(s2) * 12, 7, S - 7), ty: clamp(me.y + Math.sin(s2) * 12, 7, S - 7), throttle: 1, reverse: !strafer, face: strafer };
       }
       // circle round them on the edge of their reach (baiting a swing), wider while reloading
       me.mode = me.cd > 0.2 ? 'back off' : 'circle';
@@ -313,12 +320,12 @@ function brain(b: Battle, me: Bot, foe: Bot): Goal {
       const R = foeReach + (me.cd > 0.2 ? FLANK.reload : 1.5);
       const aim = foe.heading + phi + 0.8 * me.orbit;
       let tx = foe.x + Math.cos(aim) * R, ty = foe.y + Math.sin(aim) * R;
-      if (tx < 7 || tx > ARENA - 7 || ty < 7 || ty > ARENA - 7) {
+      if (tx < 7 || tx > S - 7 || ty < 7 || ty > S - 7) {
         const alt = foe.heading + phi - 0.8 * me.orbit; // pinned against a wall: go the other way round
         tx = foe.x + Math.cos(alt) * R; ty = foe.y + Math.sin(alt) * R;
       }
       // while reloading, back away still facing them rather than show them its back
-      return { tx: clamp(tx, 7, ARENA - 7), ty: clamp(ty, 7, ARENA - 7), throttle: 1, reverse: !strafer && FLANK.backOff && me.cd > 0.2 && d < foeReach + 6, face: strafer };
+      return { tx: clamp(tx, 7, S - 7), ty: clamp(ty, 7, S - 7), throttle: 1, reverse: !strafer && FLANK.backOff && me.cd > 0.2 && d < foeReach + 6, face: strafer };
     }
     case 'tactician': {
       // the best ground: fast for me, slow for them
@@ -327,8 +334,8 @@ function brain(b: Battle, me: Bot, foe: Bot): Goal {
         const s = SPEED[terrain(me.build.drive, z)] / SPEED[terrain(foe.build.drive, z)];
         if (s > score + 1e-6) { score = s; best = z; }
       }
-      const c = zoneCentre(b.layout, best);
-      const foeIn = zoneAt(b.layout, foe.x, foe.y) === best;
+      const c = zoneCentre(b.layout, best, S);
+      const foeIn = zoneAt(b.layout, foe.x, foe.y, S) === best;
       const meIn = me.zone === best;
       if (foeIn || helpless || late || me.wait > 5 || d < reach + 6) { me.mode = meIn || foeIn ? 'home fight' : 'engage'; return charge(0.2); }
       if (!meIn || Math.hypot(c.x - me.x, c.y - me.y) > 10) { me.mode = 'to zone'; return { tx: c.x, ty: c.y, throttle: 1 }; }
@@ -339,7 +346,7 @@ function brain(b: Battle, me: Bot, foe: Bot): Goal {
   }
 }
 
-function canStrike(me: Bot, foe: Bot) {
+export function canStrike(me: Bot, foe: Bot) {
   const W = WEAPONS[me.build.weapon];
   const reach = W.reach + BODIES[me.build.body].radius + BODIES[foe.build.body].radius;
   const d = dist(me, foe);
@@ -350,7 +357,7 @@ function canStrike(me: Bot, foe: Bot) {
   return Math.abs(wrap(Math.atan2(foe.y - me.y, foe.x - me.x) - me.heading)) <= W.arc;
 }
 
-function strike(b: Battle, me: Bot, foe: Bot) {
+export function strike(b: Battle, me: Bot, foe: Bot) {
   const W = WEAPONS[me.build.weapon];
   const d = dist(me, foe);
   me.cd = W.cooldown; me.swing = 0; me.recover = RECOVER;
@@ -367,6 +374,7 @@ function strike(b: Battle, me: Bot, foe: Bot) {
   const dmg = Math.round(W.damage * matchMul(m) * DIR_MUL[dir] * (0.85 + 0.3 * b.r()) * 10) / 10;
   foe.hp = Math.max(0, foe.hp - dmg);
   me.dealt += dmg; me.hits++;
+  foe.lastBy = me.side; foe.lastByT = b.t;
   const ux = (foe.x - me.x) / (d || 1), uy = (foe.y - me.y) / (d || 1);
   const mass = BODIES[foe.build.body].mass * DRIVES[foe.build.drive].grip;
   // the matchup scales the weapon's effect as well as its damage: a flipper really can't get under a wedge
@@ -375,7 +383,7 @@ function strike(b: Battle, me: Bot, foe: Bot) {
     case 'flipper': foe.kx += (ux * 26 * fx) / mass; foe.ky += (uy * 26 * fx) / mass; foe.heading = wrap(foe.heading + (b.r() < 0.5 ? -1 : 1) * (0.6 + 0.9 * b.r()) * fx); foe.stun = Math.max(foe.stun, 1.0 * fx); foe.flipped = 1.0 * fx; break;
     case 'spinner': foe.kx += (ux * 20 * fx) / mass; foe.ky += (uy * 20 * fx) / mass; foe.heading = wrap(foe.heading + (b.r() < 0.5 ? -1 : 1) * (0.5 + 0.8 * b.r()) * fx); me.kx -= ux * 12; me.ky -= uy * 12; foe.stun = Math.max(foe.stun, 0.25 * fx); break;
     case 'hammer': foe.stun = Math.max(foe.stun, 0.6 * fx); foe.speed *= 0.2; foe.vs *= 0.2; foe.vx *= 0.2; foe.vy *= 0.2; break;
-    case 'claw': foe.stun = Math.max(foe.stun, 1.0 * fx); foe.held = 1.0 * fx; foe.speed = 0; foe.vs = 0; foe.vx = 0; foe.vy = 0; break;
+    case 'claw': foe.stun = Math.max(foe.stun, 1.0 * fx); foe.held = 1.0 * fx; foe.heldBy = me.side; foe.speed = 0; foe.vs = 0; foe.vx = 0; foe.vy = 0; break;
   }
   b.events.push({ t: b.t, kind: 'hit', by: me.side, on: foe.side, dmg, dir, match: m, weapon: me.build.weapon, x: (me.x + foe.x) / 2, y: (me.y + foe.y) / 2 });
 }
@@ -419,8 +427,9 @@ export function driveStep(me: Bot, c: Cmd, ice = me.zone === 'ice') {
   me.gait += (Math.abs(me.speed) + Math.abs(me.vs) * 1.3 + Math.abs(me.omega) * half) * DT;
 }
 
-function move(b: Battle, me: Bot, foe: Bot) {
-  const D = DRIVES[me.build.drive];
+/** Drive one robot for a step, chasing (or dodging) `foe`. */
+export function move(b: Battle, me: Bot, foe: Bot) {
+  const D = DRIVES[me.build.drive], S = b.size;
   if (me.stun > 0) {
     me.speed *= Math.exp(-DT / 0.15); me.vs *= Math.exp(-DT / 0.15);
     driveStep(me, { fwd: me.speed, side: me.vs, turn: 0 });
@@ -484,8 +493,9 @@ function move(b: Battle, me: Bot, foe: Bot) {
   void D;
   // a claw holds its victim in place, right in front of it
   if (me.held > 0) {
-    const fx = foe.x + Math.cos(foe.heading) * (BODIES[foe.build.body].radius + BODIES[me.build.body].radius + 1);
-    const fy = foe.y + Math.sin(foe.heading) * (BODIES[foe.build.body].radius + BODIES[me.build.body].radius + 1);
+    const h = b.bots[me.heldBy ?? foe.side] ?? foe;
+    const fx = h.x + Math.cos(h.heading) * (BODIES[h.build.body].radius + BODIES[me.build.body].radius + 1);
+    const fy = h.y + Math.sin(h.heading) * (BODIES[h.build.body].radius + BODIES[me.build.body].radius + 1);
     me.x += (fx - me.x) * 0.2; me.y += (fy - me.y) * 0.2;
   }
   me.x += (me.vx + me.kx) * DT;
@@ -496,15 +506,16 @@ function move(b: Battle, me: Bot, foe: Bot) {
   me.kx *= k; me.ky *= k;
   const r = BODIES[me.build.body].radius;
   if (me.x < r) { me.x = r; me.kx = Math.abs(me.kx) * 0.4; me.vx = Math.max(0, me.vx); me.speed *= 0.5; }
-  if (me.x > ARENA - r) { me.x = ARENA - r; me.kx = -Math.abs(me.kx) * 0.4; me.vx = Math.min(0, me.vx); me.speed *= 0.5; }
+  if (me.x > S - r) { me.x = S - r; me.kx = -Math.abs(me.kx) * 0.4; me.vx = Math.min(0, me.vx); me.speed *= 0.5; }
   if (me.y < r) { me.y = r; me.ky = Math.abs(me.ky) * 0.4; me.vy = Math.max(0, me.vy); me.speed *= 0.5; }
-  if (me.y > ARENA - r) { me.y = ARENA - r; me.ky = -Math.abs(me.ky) * 0.4; me.vy = Math.min(0, me.vy); me.speed *= 0.5; }
-  const z = zoneAt(b.layout, me.x, me.y);
+  if (me.y > S - r) { me.y = S - r; me.ky = -Math.abs(me.ky) * 0.4; me.vy = Math.min(0, me.vy); me.speed *= 0.5; }
+  const z = zoneAt(b.layout, me.x, me.y, S);
   if (z !== me.zone) { me.zone = z; b.events.push({ t: b.t, kind: 'zone', by: me.side, zone: z }); }
 }
 
-function collide(b: Battle) {
-  const [p, q] = b.bots;
+function collide(b: Battle) { collidePair(b, b.bots[0], b.bots[1]); }
+/** Two robots bumping: push them apart (the heavier one wins), and a wedge nose-first rams. */
+export function collidePair(b: Battle, p: Bot, q: Bot) {
   const rp = BODIES[p.build.body].radius, rq = BODIES[q.build.body].radius;
   const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 0.001;
   const overlap = rp + rq - d;
@@ -521,19 +532,22 @@ function collide(b: Battle) {
     const m = BODIES[foe.build.body].mass * DRIVES[foe.build.drive].grip;
     foe.kx += (ux * s * 18) / m; foe.ky += (uy * s * 18) / m;
     const dmg = 3;
-    foe.hp = Math.max(0, foe.hp - dmg); me.dealt += dmg; me.ram = 1.2;
+    foe.hp = Math.max(0, foe.hp - dmg); me.dealt += dmg; me.ram = 1.2; foe.lastBy = me.side; foe.lastByT = b.t;
     b.events.push({ t: b.t, kind: 'ram', by: me.side, on: foe.side, dmg, x: (me.x + foe.x) / 2, y: (me.y + foe.y) / 2 });
   }
+}
+
+/** The clocks on one robot: cooldowns, stuns and so on. */
+export function tick(me: Bot) {
+  me.cd = Math.max(0, me.cd - DT); me.stun = Math.max(0, me.stun - DT); me.flipped = Math.max(0, me.flipped - DT);
+  me.held = Math.max(0, me.held - DT); me.recover = Math.max(0, me.recover - DT); me.ram = Math.max(0, me.ram - DT); me.swing += DT;
 }
 
 export function step(b: Battle) {
   if (b.over) return;
   b.t += DT;
   const [p, q] = b.bots;
-  for (const me of b.bots) {
-    me.cd = Math.max(0, me.cd - DT); me.stun = Math.max(0, me.stun - DT); me.flipped = Math.max(0, me.flipped - DT);
-    me.held = Math.max(0, me.held - DT); me.recover = Math.max(0, me.recover - DT); me.ram = Math.max(0, me.ram - DT); me.swing += DT;
-  }
+  for (const me of b.bots) tick(me);
   if (Math.round(b.t / DT) % 2) { move(b, p, q); move(b, q, p); } else { move(b, q, p); move(b, p, q); }
   collide(b);
   const sp = canStrike(p, q), sq = canStrike(q, p);
@@ -545,7 +559,7 @@ export function step(b: Battle) {
       b.events.push({ t: b.t, kind: 'ko', by: b.winner, on: me.side });
     }
   }
-  if (!b.over && b.t >= TIME_LIMIT) {
+  if (!b.over && b.t >= b.limit) {
     b.over = true;
     if (Math.abs(p.dealt - q.dealt) >= 0.05) { b.winner = p.dealt > q.dealt ? 0 : 1; b.reason = 'points'; }
     else { b.winner = p.aggression >= q.aggression ? 0 : 1; b.reason = 'judges'; }
