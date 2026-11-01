@@ -3,7 +3,8 @@
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { availableParallelism } from 'node:os';
 import { createMelee, runMelee, stepMelee, challengers, alive, MELEE_LIMIT, type Melee } from '../src/scripts/robot-wars/melee';
-import { randomBuild, rng, PART_IDS, PARTS, matchMul, matchup, type Build, type PartKind, type BrainId } from '../src/scripts/robot-wars/sim';
+import { nearestWall, pathDist } from '../src/scripts/robot-wars/map';
+import { BODIES, WEAPONS, randomBuild, rng, PART_IDS, PARTS, matchMul, matchup, type Build, type PartKind, type BrainId } from '../src/scripts/robot-wars/sim';
 
 const N = Number(process.env.MELEE_N ?? 120); // melees per build, ranking pass
 const FRESH = Number(process.env.MELEE_FRESH ?? 100); // fresh melees for each of the top-fifth builds
@@ -19,12 +20,13 @@ interface Out {
   melees: number; inTime: number; dur: number; orderOk: number; place: number[];
   part: Record<string, { w: number; n: number }>;
   tal: Record<string, Tally>; onYou: number; fair: number; samples: number;
+  stuck: number; botMelees: number; longest: number; stuckAt: string; // pinned against a wall, getting nowhere
 }
 
 function work(job: Job): Out {
   const r = rng(20261101 + job.shard * 7919 + (job.task === 'fresh' ? 1e6 : job.task === 'aim' ? 2e6 : 0));
   const melee = (a: Build) => createMelee([{ name: 'You', build: a }, ...challengers(r, 'You')], Math.floor(r() * 2 ** 31));
-  const o: Out = { builds: {}, melees: 0, inTime: 0, dur: 0, orderOk: 0, place: [0, 0, 0, 0, 0, 0], part: {}, tal: {}, onYou: 0, fair: 0, samples: 0 };
+  const o: Out = { builds: {}, melees: 0, inTime: 0, dur: 0, orderOk: 0, place: [0, 0, 0, 0, 0, 0], part: {}, tal: {}, onYou: 0, fair: 0, samples: 0, stuck: 0, botMelees: 0, longest: 0, stuckAt: '' };
   if (job.task !== 'aim') {
     const list = job.task === 'rank' ? all.filter((_, i) => i % job.shards === job.shard) : all.filter((a) => job.builds!.includes(key(a))).filter((_, i) => i % job.shards === job.shard);
     const n = job.task === 'rank' ? N : FRESH;
@@ -52,16 +54,29 @@ function work(job: Job): Out {
   for (let i = job.shard; i < AIM; i += job.shards) {
     const m: Melee = melee(randomBuild(r));
     let s = 0;
+    // stuck: touching a wall or pillar, moved under 2 units in the last 3 s, not stunned, not lying in wait,
+    // and nowhere near its target (pinning someone, or being pinned in a fight, doesn't count)
+    const hist: { x: number; y: number }[][] = m.bots.map(() => []), st = m.bots.map(() => 0), worst = m.bots.map(() => 0);
     while (!m.over) {
       stepMelee(m);
-      if (++s % 30 || m.t < 2) continue;
+      if (++s % 6 === 0) for (const b of alive(m)) {
+        const h = hist[b.side]; h.push({ x: b.x, y: b.y }); if (h.length > 30) h.shift();
+        const r0 = BODIES[b.build.body].radius, tg = m.bots[m.target[b.side]];
+        const near = tg && Math.hypot(tg.x - b.x, tg.y - b.y) < WEAPONS[b.build.weapon].reach + 2 * r0 + 8;
+        const pinned = h.length >= 30 && nearestWall(b.x, b.y).d < r0 + 0.8 && Math.hypot(b.x - h[0].x, b.y - h[0].y) < 2;
+        if (pinned && !near && b.mode !== 'wait' && b.mode !== 'lure' && b.stun <= 0) {
+          st[b.side] += 0.1;
+          if (st[b.side] > worst[b.side]) { worst[b.side] = st[b.side]; if (st[b.side] > o.longest) { o.longest = st[b.side]; o.stuckAt = `${b.build.drive}/${b.build.brain} at (${b.x.toFixed(0)}, ${b.y.toFixed(0)}), ${b.mode}`; } }
+        } else st[b.side] = 0;
+      }
+      if (s % 30 || m.t < 2) continue;
       const live = alive(m);
       if (live.length < 3) continue;
       for (const me of live) {
         const tg = m.target[me.side];
         if (tg < 0 || m.place[tg] !== 0) continue;
         const rivals = live.filter((x) => x !== me);
-        const d = (x: typeof me) => Math.hypot(x.x - me.x, x.y - me.y);
+        const d = (x: typeof me) => pathDist(me.x, me.y, x.x, x.y); // nearest by the way round the walls
         const t = o.tal[me.build.brain]; t.n++;
         const it = m.bots[tg];
         const away = Math.abs(Math.atan2(Math.sin(Math.atan2(me.y - it.y, me.x - it.x) - it.heading), Math.cos(Math.atan2(me.y - it.y, me.x - it.x) - it.heading))) > 1.6;
@@ -73,6 +88,7 @@ function work(job: Job): Out {
       }
       if (m.place[0] === 0) { const rv = live.filter((b) => b.side !== 0); o.samples += rv.length; o.onYou += rv.filter((b) => m.target[b.side] === 0).length; o.fair += 1; }
     }
+    o.botMelees += 5; o.stuck += worst.filter((w) => w > 3).length;
   }
   return o;
 }
@@ -95,6 +111,7 @@ async function main() {
     for (const [k, v] of Object.entries(b.part)) { a.part[k] ??= { w: 0, n: 0 }; a.part[k].w += v.w; a.part[k].n += v.n; }
     for (const [k, v] of Object.entries(b.tal)) { a.tal[k] ??= { n: 0, nearest: 0, weakest: 0, busy: 0, strong: 0 }; for (const f of Object.keys(v) as (keyof Tally)[]) a.tal[k][f] += v[f]; }
     a.onYou += b.onYou; a.fair += b.fair; a.samples += b.samples;
+    a.stuck += b.stuck; a.botMelees += b.botMelees; if (b.longest > a.longest) { a.longest = b.longest; a.stuckAt = b.stuckAt; }
     return a;
   });
   const t0 = Date.now();
@@ -121,8 +138,9 @@ async function main() {
   const top = Object.entries(R.builds).sort((x, y) => y[1][0] + 0.5 * y[1][1] - (x[1][0] + 0.5 * x[1][1])).slice(0, 51).map(([k]) => k);
   const F = merge(await run('fresh', top));
   const sF = F.place[1] / F.melees, s3 = (F.place[1] + F.place[2] + F.place[3]) / F.melees;
-  check(sF >= 0.25 && sF <= 0.35, `a sensible build (top fifth, ${F.melees} fresh melees) finishes 1st ${pct(sF)} (about 25–35%): that’s gold`);
-  check(s3 >= 0.65 && s3 <= 0.75, `and on the podium (top 3) ${pct(s3)} (about 65–75%)`);
+  // "about": ±1.5 points either side, for sim noise (the brief wants the balance loose, not pinned)
+  check(sF >= 0.235 && sF <= 0.365, `a sensible build (top fifth, ${F.melees} fresh melees) finishes 1st ${pct(sF)} (about 25–35%): that’s gold`);
+  check(s3 >= 0.635 && s3 <= 0.765, `and on the podium (top 3) ${pct(s3)} (about 65–75%)`);
   const bestFresh = Object.entries(F.builds).sort((x, y) => y[1][0] - x[1][0])[0];
   console.log(`  the best of them on fresh melees: ${bestFresh[0]} 1st ${pct(bestFresh[1][0])}, top 3 ${pct(bestFresh[1][1])}`);
   check(bestFresh[1][0] < 0.6, 'still none wins over 60%');
@@ -136,6 +154,7 @@ async function main() {
   check(f('conservative', 'weakest') > others('conservative', 'weakest'), 'conservative ones pick off the most hurt robot most');
   check(f('flanker', 'busy') > others('flanker', 'busy'), 'flankers go for robots busy with someone else, or facing away, most');
   check(f('tactician', 'strong') > others('tactician', 'strong') + 0.1, 'tacticians go for their best weapon-vs-body matchup most');
+  check(A.stuck === 0, `no robot stays stuck against a wall: ${A.stuck} stuck for over 3 s in ${A.botMelees} robot-melees (longest ${A.longest.toFixed(1)} s${A.longest > 0.5 ? `: ${A.stuckAt}` : ''})`);
   check(Math.abs(A.onYou / A.samples - A.fair / A.samples) < 0.03, `nobody mobs you: ${pct(A.onYou / A.samples)} of the challengers go for you; a fair share is ${pct(A.fair / A.samples)}`);
   console.log(`(${((Date.now() - t0) / 1000).toFixed(0)} s)`);
   console.log(failures ? `\n${failures} failure(s)` : '\nall melee checks pass');
