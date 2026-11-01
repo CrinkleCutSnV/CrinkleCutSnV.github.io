@@ -41,11 +41,11 @@ export interface Drive {
 export const DRIVES: Record<DriveId, Drive> = {
   wheels: {
     name: 'Wheels', blurb: 'Four fat tyres: quick, and they carve lovely arcs.', handling: 'Can’t turn on the spot, so it swings round in curves or backs up to turn. Quick in a straight line.',
-    speed: 17, accel: 24, pivot: 0, pivotFade: 1, radius: 5.5, turnCap: 2.4, strafe: 0, strafeAccel: 0, drift: 0.08, grip: 1, fast: 'steel', slow: 'sand',
+    speed: 19, accel: 28, pivot: 0, pivotFade: 1, radius: 4.8, turnCap: 2.8, strafe: 0, strafeAccel: 0, drift: 0.05, grip: 1, fast: 'steel', slow: 'sand',
   },
   tracks: {
     name: 'Tracks', blurb: 'Tank treads: grippy, strong and hard to shove about.', handling: 'Fastest in a straight line but turns in wide, lazy arcs. Stops and spins on the spot to line up.',
-    speed: 18.5, accel: 20, pivot: 2.5, pivotFade: 5, radius: 16, turnCap: 0.85, strafe: 0, strafeAccel: 0, drift: 0.04, grip: 1.25, fast: 'sand', slow: 'ice',
+    speed: 19.5, accel: 20, pivot: 2.5, pivotFade: 5, radius: 16, turnCap: 0.85, strafe: 0, strafeAccel: 0, drift: 0.04, grip: 1.25, fast: 'sand', slow: 'ice',
   },
   legs: {
     name: 'Legs', blurb: 'Six stompy legs: turns on a sixpence.', handling: 'Slowest in a straight line, but spins on the spot, turns tightly and side-steps neatly.',
@@ -63,7 +63,7 @@ export interface Weapon { name: string; blurb: string; damage: number; cooldown:
 export const WEAPONS: Record<WeaponId, Weapon> = {
   flipper: { name: 'Flipper', blurb: 'Flings them over: they’re stuck righting themselves.', damage: 8.7, cooldown: 1.5, reach: 4, arc: 0.75, strong: 'box', weak: 'wedge' },
   spinner: { name: 'Spinning disc', blurb: 'A whirling, toothed disc. Big hits, big recoil.', damage: 10.1, cooldown: 1.2, reach: 3.5, arc: 0.7, strong: 'frame', weak: 'dome' },
-  hammer: { name: 'Hammer', blurb: 'An axe-hammer that slams down from above. Long reach.', damage: 20.3, cooldown: 1.9, reach: 6.5, arc: 0.5, strong: 'dome', weak: 'frame' },
+  hammer: { name: 'Hammer', blurb: 'An axe-hammer that slams down from above. Long reach.', damage: 19.2, cooldown: 1.9, reach: 6.5, arc: 0.5, strong: 'dome', weak: 'frame' },
   claw: { name: 'Crushing claw', blurb: 'Grabs, holds and squeezes. They can’t move while held.', damage: 20.8, cooldown: 2.1, reach: 3.5, arc: 0.85, strong: 'wedge', weak: 'box' },
 };
 
@@ -414,7 +414,8 @@ export function driveStep(me: Bot, c: Cmd, ice = me.zone === 'ice') {
   me.vx += (wx - me.vx) * f; me.vy += (wy - me.vy) * f;
   // for the animation: each side's track/wheel rolls with forward speed ± the turn
   const half = BODIES[me.build.body].radius;
-  me.odoL += (me.speed - me.omega * half) * DT; me.odoR += (me.speed + me.omega * half) * DT;
+  // (heading grows clockwise on screen, so turning that way the left side, local −y, runs faster)
+  me.odoL += (me.speed + me.omega * half) * DT; me.odoR += (me.speed - me.omega * half) * DT;
   me.gait += (Math.abs(me.speed) + Math.abs(me.vs) * 1.3 + Math.abs(me.omega) * half) * DT;
 }
 

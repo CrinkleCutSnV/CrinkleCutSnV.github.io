@@ -26,6 +26,9 @@ export interface BotLook {
   stun?: number;
   hp?: number; maxHp?: number;
   odo?: number; // distance travelled, for wheel and leg animation
+  // from the sim's drive model (optional: the builder previews leave them out)
+  omega?: number; vs?: number; vx?: number; vy?: number;
+  odoL?: number; odoR?: number; gait?: number; manoeuvre?: string;
 }
 
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -154,46 +157,76 @@ export function drawBot(ctx: CanvasRenderingContext2D, b: BotLook, k: number, t:
 
 function drawDrive(ctx: CanvasRenderingContext2D, b: BotLook, r: number, k: number, t: number, odo: number, flipped: boolean) {
   const d = b.build.drive;
+  const speed = b.speed ?? 0, omega = b.omega ?? 0, vs = b.vs ?? 0;
+  const half = BODIES[b.build.body].radius;
+  // each side rolls with its own odometer: when a tracked bot pivots, the two sides run opposite ways
+  const sideOdo = (sy: number) => (sy < 0 ? b.odoL : b.odoR) ?? odo;
+  const sideRate = (sy: number) => speed + (sy < 0 ? 1 : -1) * omega * half;
   if (d === 'wheels') {
+    // front wheels steer into the turn, so you can see it carving an arc
+    const steer = Math.max(-0.55, Math.min(0.55, Math.atan2(omega * 2 * half, Math.max(2, Math.abs(speed))) * Math.sign(speed || 1)));
     for (const sx of [-0.55, 0.55]) for (const sy of [-1, 1]) {
       ctx.save(); ctx.translate(sx * r, sy * r * 0.98);
+      if (sx > 0) ctx.rotate(steer);
       ctx.fillStyle = '#34364a'; rr(ctx, -0.36 * r, -0.2 * r, 0.72 * r, 0.4 * r, 0.12 * r); ctx.fill(); ctx.stroke();
       // tread marks rolling round
       ctx.strokeStyle = '#6b6e85'; ctx.lineWidth = Math.max(1, 0.18 * k);
-      for (let i = 0; i < 4; i++) { const x = (((odo * 0.9 + i * 0.25) % 1) - 0.5) * 0.66 * r; ctx.beginPath(); ctx.moveTo(x, -0.16 * r); ctx.lineTo(x, 0.16 * r); ctx.stroke(); }
+      const o = sideOdo(sy) / (half * 0.9);
+      for (let i = 0; i < 4; i++) { const x = ((((-o * 0.9 + i * 0.25) % 1) + 1) % 1 - 0.5) * 0.66 * r; ctx.beginPath(); ctx.moveTo(x, -0.16 * r); ctx.lineTo(x, 0.16 * r); ctx.stroke(); }
       ctx.restore();
     }
   } else if (d === 'tracks') {
+    const pivoting = Math.abs(omega) > 0.5 && Math.abs(speed) < 4;
     for (const sy of [-1, 1]) {
       ctx.save(); ctx.translate(0, sy * r * 0.95);
       ctx.fillStyle = '#3b3d52'; rr(ctx, -1.05 * r, -0.27 * r, 2.1 * r, 0.54 * r, 0.25 * r); ctx.fill(); ctx.stroke();
       ctx.strokeStyle = '#8b8ea6'; ctx.lineWidth = Math.max(1, 0.2 * k);
-      for (let i = 0; i < 9; i++) { const x = ((((odo * 0.7 + i / 9) % 1) + 1) % 1 - 0.5) * 1.9 * r; ctx.beginPath(); ctx.moveTo(x, -0.2 * r); ctx.lineTo(x, 0.2 * r); ctx.stroke(); }
+      const o = sideOdo(sy) / (half * 2);
+      for (let i = 0; i < 9; i++) { const x = ((((-o + i / 9) % 1) + 1) % 1 - 0.5) * 1.9 * r; ctx.beginPath(); ctx.moveTo(x, -0.2 * r); ctx.lineTo(x, 0.2 * r); ctx.stroke(); }
       ctx.fillStyle = '#6b6e85';
       for (const x of [-0.78, 0.78]) { ctx.beginPath(); ctx.arc(x * r, 0, 0.13 * r, 0, 7); ctx.fill(); }
+      // spinning on the spot: an arrow on each track, pointing opposite ways
+      if (pivoting) {
+        const dir = Math.sign(sideRate(sy)) || 1;
+        ctx.save(); ctx.translate(0, sy * 0.62 * r); ctx.scale(dir, 1);
+        ctx.fillStyle = '#ffd166'; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1, 0.22 * k);
+        ctx.beginPath(); ctx.moveTo(-0.55 * r, -0.1 * r); ctx.lineTo(0.25 * r, -0.1 * r); ctx.lineTo(0.25 * r, -0.24 * r); ctx.lineTo(0.6 * r, 0); ctx.lineTo(0.25 * r, 0.24 * r); ctx.lineTo(0.25 * r, 0.1 * r); ctx.lineTo(-0.55 * r, 0.1 * r); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
       ctx.restore();
     }
   } else if (d === 'legs') {
     ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, 0.55 * k);
+    const gait = (b.gait ?? odo) / (half * 0.9);
+    // the legs swing the way it's walking: forwards, or crisply sideways when it side-steps
+    const fwdW = Math.abs(speed) + Math.abs(omega) * half * 0.6, sideW = Math.abs(vs) * 1.3;
+    const tot = fwdW + sideW || 1;
+    const ax = (fwdW / tot) * Math.sign(speed || 1), ay = (sideW / tot) * Math.sign(vs || 1);
     for (const sy of [-1, 1]) for (let i = 0; i < 3; i++) {
-      const phase = odo * 2.2 + i * 2.1 + (sy > 0 ? Math.PI : 0);
-      const bx = (i - 1) * 0.6 * r, swingx = Math.sin(phase) * 0.28 * r;
-      const kx = bx + swingx * 0.5, ky = sy * 1.25 * r, fx = bx + swingx, fy = sy * (1.55 + 0.08 * Math.cos(phase)) * r;
+      const phase = gait * 2.2 + i * 2.1 + (sy > 0 ? Math.PI : 0);
+      // a crisp step: the foot snaps forward, then plants
+      const sw = Math.sin(phase), step = Math.sign(sw) * Math.pow(Math.abs(sw), 0.5);
+      const lift = Math.max(0, Math.cos(phase));
+      const bx = (i - 1) * 0.6 * r, swingx = step * 0.3 * r * ax, swingy = step * 0.3 * r * ay;
+      const kx = bx + swingx * 0.5, ky = sy * 1.25 * r + swingy * 0.5, fx = bx + swingx, fy = sy * (1.55 + 0.08 * lift) * r + swingy;
       ctx.beginPath(); ctx.moveTo(bx, sy * 0.6 * r); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
       ctx.fillStyle = '#5c5f6e'; ctx.beginPath(); ctx.arc(kx, ky, 0.14 * r, 0, 7); ctx.fill();
-      ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(fx, fy, 0.12 * r, 0, 7); ctx.fill();
+      ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(fx, fy, (0.12 + 0.04 * lift) * r, 0, 7); ctx.fill();
     }
     ctx.lineWidth = Math.max(1.5, 0.42 * k);
   } else {
-    // hover: a rubber skirt on a glowing cushion of air
+    // hover: a rubber skirt on a glowing cushion of air, which trails behind when it drifts
     const bob = Math.sin(t * 7) * 0.04 * r;
-    const g = ctx.createRadialGradient(0, 0, r * 0.6, 0, 0, r * 1.55);
+    const vx = b.vx ?? 0, vy = b.vy ?? 0;
+    const c = Math.cos(-b.heading), s = Math.sin(-b.heading);
+    const lx = (vx * c - vy * s) * 0.05 * r, ly = (vx * s + vy * c) * 0.05 * r; // velocity in the bot's own frame
+    const g = ctx.createRadialGradient(-lx, -ly, r * 0.6, -lx, -ly, r * 1.6);
     g.addColorStop(0, 'rgba(120,230,255,.0)'); g.addColorStop(0.75, 'rgba(120,230,255,.55)'); g.addColorStop(1, 'rgba(120,230,255,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 1.55, 0, 7); ctx.fill();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(-lx, -ly, r * 1.6, 0, 7); ctx.fill();
     ctx.fillStyle = '#2f3145'; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.22 + bob, r * 1.22 + bob, 0, 0, 7); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = '#78e6ff'; ctx.lineWidth = Math.max(1, 0.25 * k); ctx.setLineDash([0.5 * k, 0.6 * k]); ctx.lineDashOffset = -t * 20;
     ctx.beginPath(); ctx.arc(0, 0, r * 1.08, 0, 7); ctx.stroke(); ctx.setLineDash([]);
-    // two fans at the back
+    // two fans at the back, and side jets puffing when it slides sideways
     for (const sy of [-0.55, 0.55]) {
       ctx.save(); ctx.translate(-1.02 * r, sy * r);
       ctx.fillStyle = '#4a4d66'; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1, 0.3 * k);
@@ -202,9 +235,51 @@ function drawDrive(ctx: CanvasRenderingContext2D, b: BotLook, r: number, k: numb
       for (let i = 0; i < 3; i++) { ctx.rotate(2.09); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0.26 * r, 0); ctx.stroke(); }
       ctx.restore();
     }
+    if (Math.abs(vs) > 1.5) {
+      const sy = -Math.sign(vs); // the jet blows out the far side
+      ctx.fillStyle = 'rgba(200,245,255,.75)';
+      for (let i = 0; i < 3; i++) { const f = ((t * 4 + i / 3) % 1); ctx.beginPath(); ctx.arc((i - 1) * 0.45 * r, sy * (1.3 + f * 0.7) * r, (0.12 + 0.12 * f) * r, 0, 7); ctx.fill(); }
+    }
     ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.5, 0.42 * k);
   }
   void flipped;
+}
+
+/** Ground marks behind each robot, so the handling shows even in a still: tread lines, tyre arcs, footprints, air rings. */
+export interface Mark { x: number; y: number; h: number; age: number; foot?: number }
+export function drawTrail(ctx: CanvasRenderingContext2D, drive: Build['drive'], body: Build['body'], marks: Mark[], k: number, life: number) {
+  if (marks.length < 2 && drive !== 'legs') return;
+  const R = BODIES[body].radius;
+  ctx.save(); ctx.lineCap = 'round';
+  if (drive === 'tracks' || drive === 'wheels') {
+    const off = (drive === 'tracks' ? 0.95 : 0.98) * R, w = (drive === 'tracks' ? 1.6 : 0.8) * k;
+    for (const sy of [-1, 1]) for (let i = 1; i < marks.length; i++) {
+      const p = marks[i - 1], q = marks[i];
+      if (Math.hypot(q.x - p.x, q.y - p.y) > 6) continue;
+      ctx.globalAlpha = 0.28 * Math.max(0, 1 - q.age / life);
+      ctx.strokeStyle = drive === 'tracks' ? '#2b2d42' : '#3a3c52'; ctx.lineWidth = w;
+      if (drive === 'tracks') ctx.setLineDash([0.5 * k, 0.45 * k]);
+      ctx.beginPath();
+      ctx.moveTo((p.x - Math.sin(p.h) * off * sy) * k, (p.y + Math.cos(p.h) * off * sy) * k);
+      ctx.lineTo((q.x - Math.sin(q.h) * off * sy) * k, (q.y + Math.cos(q.h) * off * sy) * k);
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+  } else if (drive === 'legs') {
+    for (const m of marks) {
+      if (m.foot === undefined) continue;
+      ctx.globalAlpha = 0.4 * Math.max(0, 1 - m.age / life);
+      ctx.fillStyle = '#2b2d42';
+      const fx = m.x - Math.sin(m.h) * 1.5 * R * m.foot, fy = m.y + Math.cos(m.h) * 1.5 * R * m.foot;
+      ctx.beginPath(); ctx.ellipse(fx * k, fy * k, 0.55 * k, 0.4 * k, m.h, 0, 7); ctx.fill();
+    }
+  } else {
+    for (let i = 0; i < marks.length; i += 3) {
+      const m = marks[i], a = Math.max(0, 1 - m.age / life);
+      ctx.globalAlpha = 0.35 * a; ctx.strokeStyle = '#78e6ff'; ctx.lineWidth = Math.max(1, 0.35 * k);
+      ctx.beginPath(); ctx.arc(m.x * k, m.y * k, (R * 0.7 + (1 - a) * R * 0.9) * k, 0, 7); ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 function drawBody(ctx: CanvasRenderingContext2D, b: BotLook, r: number, k: number, team: (typeof TEAM)[number]) {

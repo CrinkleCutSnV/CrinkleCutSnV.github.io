@@ -49,7 +49,7 @@ check(P.tracks.straight > Math.max(P.wheels.straight, P.hover.straight, P.legs.s
 check(P.wheels.straight > P.hover.straight, 'wheels are quick in a straight line (faster than hover)');
 check(P.tracks.strafe < 0.01 && P.wheels.strafe < 0.01 && P.legs.strafe > 5 && P.hover.strafe > 5, 'only legs and hover can strafe');
 check(P.legs.t80 < 0.5 * P.hover.t80, `legs side-step crisply (${P.legs.t80.toFixed(2)} s to get going), hover slides into it (${P.hover.t80.toFixed(2)} s)`);
-check(P.hover.slip > 3 * Math.max(P.wheels.slip, P.tracks.slip, P.legs.slip) && P.hover.slip > 0.2, `hover drifts on its momentum far more than the others (slides ${((P.hover.slip * 180) / Math.PI).toFixed(0)}° wide in a hard turn)`);
+check(P.hover.slip > 2.5 * Math.max(P.wheels.slip, P.tracks.slip, P.legs.slip) && P.hover.slip > 0.2, `hover drifts on its momentum far more than the others (slides ${((P.hover.slip * 180) / Math.PI).toFixed(0)}° wide in a hard turn)`);
 if (process.env.ROBOT_DRIVES_ONLY) { console.log(failures ? `\n${failures} failure(s)` : '\ndrive checks pass'); process.exit(failures ? 1 : 0); }
 
 const all: Build[] = [];

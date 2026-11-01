@@ -3,6 +3,8 @@
 import { PART_IDS, PARTS, PART_LABEL, DRIVES, WEAPONS, BODIES, ZONES, type PartKind } from '../scripts/robot-wars/sim';
 const kinds = Object.keys(PART_IDS) as PartKind[];
 const info = (kind: PartKind, id: string) => (PARTS[kind] as Record<string, { name: string; blurb: string }>)[id];
+// drives also explain how they handle
+const blurb = (kind: PartKind, id: string) => { const p = info(kind, id); return kind === 'drive' ? `${p.blurb} ${DRIVES[id as keyof typeof DRIVES].handling}` : p.blurb; };
 const hint = (kind: PartKind, id: string): string => {
   if (kind === 'drive') { const d = DRIVES[id as keyof typeof DRIVES]; return `Fast on ${ZONES[d.fast].name.toLowerCase()} · slow on ${ZONES[d.slow].name.toLowerCase()}`; }
   if (kind === 'weapon') { const w = WEAPONS[id as keyof typeof WEAPONS]; return `Strong vs ${BODIES[w.strong].name} · weak vs ${BODIES[w.weak].name}`; }
@@ -38,7 +40,7 @@ const hint = (kind: PartKind, id: string): string => {
             {PART_IDS[kind].map((id) => {
               const p = info(kind, id);
               return (
-                <button type="button" class="opt" role="radio" aria-checked="false" data-part={kind} data-id={id} title={p.blurb} data-blurb={p.blurb} data-hint={hint(kind, id)}>
+                <button type="button" class="opt" role="radio" aria-checked="false" data-part={kind} data-id={id} title={blurb(kind, id)} data-blurb={blurb(kind, id)} data-hint={hint(kind, id)}>
                   <canvas class="opt-icon" data-icon aria-hidden="true"></canvas>
                   <span class="opt-name">{p.name}</span>
                 </button>

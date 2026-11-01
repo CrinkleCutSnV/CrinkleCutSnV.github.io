@@ -4,7 +4,7 @@ import {
   createBattle, matchup, randomBuild, randomLayout, randomName, rng, step,
   type Battle, type BattleEvent, type Build, type Layout, type PartKind, type ZoneId,
 } from './sim';
-import { INK, TEAM, ZONE_EMOJI, drawArena, drawBot, drawPartIcon, type BotLook } from './draw';
+import { INK, TEAM, ZONE_EMOJI, drawArena, drawBot, drawPartIcon, drawTrail, type BotLook, type Mark } from './draw';
 import { BEST_STREAK_KEY, LAST_BUILD_KEY } from './keys';
 import { readNumber, saveRecord } from '../scores';
 import { awardMedal, medalPopHtml } from '../medals';
@@ -58,6 +58,8 @@ export function initRobotWars(root: HTMLElement) {
   let speed = 1, acc = 0, phaseT = 0, evIndex = 0, shake = 0;
   let sparks: Spark[] = [], floaters: Floater[] = [];
   const odo = [0, 0];
+  let trails: Mark[][] = [[], []], steps = 0;
+  const footStep = [0, 0], TRAIL_LIFE = 2.6;
   let lastLine = -9, lastLow: Record<string, number> = {};
   let arenaCache: HTMLCanvasElement | null = null, cacheKey = '';
   let dpr = 1;
@@ -133,7 +135,7 @@ export function initRobotWars(root: HTMLElement) {
     const layout = forced?.layout ?? randomLayout(r);
     forced = null;
     battle = createBattle({ name, build }, opp, seed, layout);
-    evIndex = 0; sparks = []; floaters = []; odo[0] = odo[1] = 0; shake = 0; acc = 0; lastLine = -9; lastLow = {};
+    evIndex = 0; sparks = []; floaters = []; odo[0] = odo[1] = 0; trails = [[], []]; steps = 0; footStep[0] = footStep[1] = 0; shake = 0; acc = 0; lastLine = -9; lastLow = {};
     ui.log.innerHTML = '';
     ui.builder.classList.add('is-hidden');
     ui.battle.classList.remove('is-hidden');
@@ -322,6 +324,7 @@ export function initRobotWars(root: HTMLElement) {
     ctx.drawImage(arenaCache!, 0, 0);
     // a KO'd robot lies there smoking; the winner gets drawn on top
     const order = battle.over && battle.winner === 0 ? [1, 0] : [0, 1];
+    for (const i of order) drawTrail(ctx, battle.bots[i].build.drive, battle.bots[i].build.body, trails[i], k, TRAIL_LIFE);
     for (const i of order) {
       const b = battle.bots[i];
       ctx.save();
@@ -357,6 +360,18 @@ export function initRobotWars(root: HTMLElement) {
     step(b);
     odo[0] += Math.hypot(b.bots[0].x - before[0], b.bots[0].y - before[1]);
     odo[1] += Math.hypot(b.bots[1].x - before[2], b.bots[1].y - before[3]);
+    // ground marks: tread and tyre lines, footprints, air rings
+    steps++;
+    b.bots.forEach((bot, i) => {
+      const tr = trails[i];
+      for (const m of tr) m.age += DT;
+      while (tr.length && tr[0].age > TRAIL_LIFE) tr.shift();
+      if (bot.hp <= 0) return;
+      if (bot.build.drive === 'legs') {
+        const n = Math.floor((bot.gait / (BODIES[bot.build.body].radius * 0.9)) * 2.2 / Math.PI);
+        if (n !== footStep[i]) { footStep[i] = n; tr.push({ x: bot.x, y: bot.y, h: bot.heading, age: 0, foot: n % 2 ? 1 : -1 }); }
+      } else if (steps % 3 === 0 && (Math.hypot(bot.vx, bot.vy) > 0.5 || Math.abs(bot.omega) > 0.3)) tr.push({ x: bot.x, y: bot.y, h: bot.heading, age: 0 });
+    });
     for (; evIndex < b.events.length; evIndex++) { const e = b.events[evIndex]; effects(e); commentate(e); }
   }
   let last = 0, wall = 0;
