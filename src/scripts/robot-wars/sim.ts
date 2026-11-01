@@ -41,7 +41,7 @@ export interface Drive {
 export const DRIVES: Record<DriveId, Drive> = {
   wheels: {
     name: 'Wheels', blurb: 'Four fat tyres: quick, and they carve lovely arcs.', handling: 'Can’t turn on the spot, so it swings round in curves or backs up to turn. Quick in a straight line.',
-    speed: 19, accel: 28, pivot: 0, pivotFade: 1, radius: 4.8, turnCap: 2.8, strafe: 0, strafeAccel: 0, drift: 0.05, grip: 1, fast: 'steel', slow: 'sand',
+    speed: 19, accel: 28, pivot: 0, pivotFade: 1, radius: 4.8, turnCap: 2.8, strafe: 0, strafeAccel: 0, drift: 0.05, grip: 1.08, fast: 'steel', slow: 'sand',
   },
   tracks: {
     name: 'Tracks', blurb: 'Tank treads: grippy, strong and hard to shove about.', handling: 'Fastest in a straight line but turns in wide, lazy arcs. Stops and spins on the spot to line up.',
@@ -49,7 +49,7 @@ export const DRIVES: Record<DriveId, Drive> = {
   },
   legs: {
     name: 'Legs', blurb: 'Six stompy legs: turns on a sixpence.', handling: 'Slowest in a straight line, but spins on the spot, turns tightly and side-steps neatly.',
-    speed: 12.5, accel: 30, pivot: 3.6, pivotFade: 99, radius: 0, turnCap: 3.2, strafe: 8.5, strafeAccel: 40, drift: 0.03, grip: 1.1, fast: 'rubble', slow: 'steel',
+    speed: 12.5, accel: 30, pivot: 3.6, pivotFade: 99, radius: 0, turnCap: 3.2, strafe: 7.5, strafeAccel: 40, drift: 0.03, grip: 1.1, fast: 'rubble', slow: 'steel',
   },
   hover: {
     name: 'Hover', blurb: 'Floats on a cushion of air: smooth, but drifty.', handling: 'Middling at everything. Turns slowly on the spot, slides sideways and drifts on its momentum.',
@@ -63,7 +63,7 @@ export interface Weapon { name: string; blurb: string; damage: number; cooldown:
 export const WEAPONS: Record<WeaponId, Weapon> = {
   flipper: { name: 'Flipper', blurb: 'Flings them over: they’re stuck righting themselves.', damage: 8.7, cooldown: 1.5, reach: 4, arc: 0.75, strong: 'box', weak: 'wedge' },
   spinner: { name: 'Spinning disc', blurb: 'A whirling, toothed disc. Big hits, big recoil.', damage: 10.1, cooldown: 1.2, reach: 3.5, arc: 0.7, strong: 'frame', weak: 'dome' },
-  hammer: { name: 'Hammer', blurb: 'An axe-hammer that slams down from above. Long reach.', damage: 19.2, cooldown: 1.9, reach: 6.5, arc: 0.5, strong: 'dome', weak: 'frame' },
+  hammer: { name: 'Hammer', blurb: 'An axe-hammer that slams down from above. Long reach.', damage: 18.3, cooldown: 1.9, reach: 6.5, arc: 0.5, strong: 'dome', weak: 'frame' },
   claw: { name: 'Crushing claw', blurb: 'Grabs, holds and squeezes. They can’t move while held.', damage: 20.8, cooldown: 2.1, reach: 3.5, arc: 0.85, strong: 'wedge', weak: 'box' },
 };
 
