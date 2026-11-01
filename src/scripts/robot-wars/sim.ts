@@ -190,7 +190,7 @@ export interface Bot {
 }
 export interface BattleEvent {
   t: number;
-  kind: 'start' | 'hit' | 'dodge' | 'miss' | 'ram' | 'zone' | 'ko' | 'time' | 'opening' | 'judges' | 'winner';
+  kind: 'start' | 'hit' | 'dodge' | 'miss' | 'ram' | 'zone' | 'ko' | 'time' | 'opening' | 'judges' | 'winner' | 'wall';
   by: number; // -1 = nobody in particular
   on?: number;
   left?: number; // melee: robots still standing
@@ -212,6 +212,13 @@ export interface Battle {
   over: boolean;
   winner: number | null;
   reason: 'ko' | 'points' | 'judges' | null;
+  // the melee's walled map plugs in here; a duel leaves these out, so it runs exactly as before
+  solid?: (me: Bot) => void; // keep it out of walls and pillars (and hurt it if it's slammed in)
+  sees?: (me: Bot, o: Bot) => boolean; // walls block the view
+  route?: (me: Bot, g: Goal, foe: Bot) => void; // steer round the walls towards the goal
+  ambush?: (me: Bot, z: ZoneId, foe: Bot) => { x: number; y: number }; // a tactician's spot to wait in its best zone
+  ground?: (x: number, y: number) => ZoneId; // which zone (or the neutral plaza) a point is in
+  onHit?: (me: Bot, foe: Bot, fx: number) => void;
 }
 
 export function makeBot(side: number, name: string, build: Build, L: Layout): Bot {
@@ -244,7 +251,7 @@ export function hitDir(tgt: Bot, att: Bot): HitDir {
 }
 
 /** The computer: where to drive, how hard, and whether it's fine to swing. */
-interface Goal { tx: number; ty: number; throttle: number; reverse?: boolean; face?: boolean /* strafers: keep the nose on the enemy while moving */ }
+export interface Goal { tx: number; ty: number; throttle: number; reverse?: boolean; face?: boolean /* strafers: keep the nose on the enemy while moving */; nav?: boolean /* melee: finding its way round a wall, so it turns at full rate */ }
 function brain(b: Battle, me: Bot, foe: Bot): Goal {
   const S = b.size;
   const d = dist(me, foe);
@@ -334,8 +341,8 @@ function brain(b: Battle, me: Bot, foe: Bot): Goal {
         const s = SPEED[terrain(me.build.drive, z)] / SPEED[terrain(foe.build.drive, z)];
         if (s > score + 1e-6) { score = s; best = z; }
       }
-      const c = zoneCentre(b.layout, best, S);
-      const foeIn = zoneAt(b.layout, foe.x, foe.y, S) === best;
+      const c = b.ambush ? b.ambush(me, best, foe) : zoneCentre(b.layout, best, S);
+      const foeIn = (b.ground ? b.ground(foe.x, foe.y) : zoneAt(b.layout, foe.x, foe.y, S)) === best;
       const meIn = me.zone === best;
       if (foeIn || helpless || late || me.wait > 5 || d < reach + 6) { me.mode = meIn || foeIn ? 'home fight' : 'engage'; return charge(0.2); }
       if (!meIn || Math.hypot(c.x - me.x, c.y - me.y) > 10) { me.mode = 'to zone'; return { tx: c.x, ty: c.y, throttle: 1 }; }
@@ -385,6 +392,7 @@ export function strike(b: Battle, me: Bot, foe: Bot) {
     case 'hammer': foe.stun = Math.max(foe.stun, 0.6 * fx); foe.speed *= 0.2; foe.vs *= 0.2; foe.vx *= 0.2; foe.vy *= 0.2; break;
     case 'claw': foe.stun = Math.max(foe.stun, 1.0 * fx); foe.held = 1.0 * fx; foe.heldBy = me.side; foe.speed = 0; foe.vs = 0; foe.vx = 0; foe.vy = 0; break;
   }
+  if (b.onHit) b.onHit(me, foe, fx);
   b.events.push({ t: b.t, kind: 'hit', by: me.side, on: foe.side, dmg, dir, match: m, weapon: me.build.weapon, x: (me.x + foe.x) / 2, y: (me.y + foe.y) / 2 });
 }
 
@@ -435,10 +443,11 @@ export function move(b: Battle, me: Bot, foe: Bot) {
     driveStep(me, { fwd: me.speed, side: me.vs, turn: 0 });
   } else {
     // it only knows where the enemy is while it's in the sensor cone, or close enough to bump into
-    const outOfSight = Math.abs(wrap(Math.atan2(foe.y - me.y, foe.x - me.x) - me.heading)) > SENSOR && dist(me, foe) > BODIES[me.build.body].radius + BODIES[foe.build.body].radius + NEAR;
+    const outOfSight = (Math.abs(wrap(Math.atan2(foe.y - me.y, foe.x - me.x) - me.heading)) > SENSOR && dist(me, foe) > BODIES[me.build.body].radius + BODIES[foe.build.body].radius + NEAR) || (b.sees !== undefined && !b.sees(me, foe));
     if (!outOfSight) { me.seenX = foe.x; me.seenY = foe.y; me.lost = 0; } else me.lost += DT;
     const view = me.lost > 0 ? { ...foe, x: me.seenX, y: me.seenY } : foe;
     const g = brain(b, me, view);
+    if (b.route && g.throttle > 0) b.route(me, g, foe);
     // lost them and reached the spot it last saw them: look around (towards them, slowly)
     const searching = me.lost > 0 && Math.hypot(me.seenX - me.x, me.seenY - me.y) < 8;
     const look = searching ? foe : view;
@@ -446,7 +455,7 @@ export function move(b: Battle, me: Bot, foe: Bot) {
     const toGoal = Math.atan2(g.ty - me.y, g.tx - me.x);
     const goalDist = Math.hypot(g.tx - me.x, g.ty - me.y);
     const top = topSpeed(me);
-    const turnMul = (me.recover > 0 ? 0.2 : 1) * (Math.abs(wrap(Math.atan2(foe.y - me.y, foe.x - me.x) - me.heading)) > SENSOR ? SEARCH_TURN : 1);
+    const turnMul = (me.recover > 0 ? 0.2 : 1) * (Math.abs(wrap(Math.atan2(foe.y - me.y, foe.x - me.x) - me.heading)) > SENSOR && !g.nav ? SEARCH_TURN : 1);
     let cmd: Cmd;
     if (g.face && canStrafe(me.build.drive) && !searching) {
       // strafe: nose on them, slide towards the goal (forwards, backwards or sideways)
@@ -500,6 +509,7 @@ export function move(b: Battle, me: Bot, foe: Bot) {
   }
   me.x += (me.vx + me.kx) * DT;
   me.y += (me.vy + me.ky) * DT;
+  if (b.solid) b.solid(me);
   // knockback dies away (faster with grip; ice barely slows a hover)
   const slide = me.zone === 'ice' ? 0.55 : 0.28;
   const k = Math.exp(-DT / (slide / D.grip));
@@ -509,7 +519,7 @@ export function move(b: Battle, me: Bot, foe: Bot) {
   if (me.x > S - r) { me.x = S - r; me.kx = -Math.abs(me.kx) * 0.4; me.vx = Math.min(0, me.vx); me.speed *= 0.5; }
   if (me.y < r) { me.y = r; me.ky = Math.abs(me.ky) * 0.4; me.vy = Math.max(0, me.vy); me.speed *= 0.5; }
   if (me.y > S - r) { me.y = S - r; me.ky = -Math.abs(me.ky) * 0.4; me.vy = Math.min(0, me.vy); me.speed *= 0.5; }
-  const z = zoneAt(b.layout, me.x, me.y, S);
+  const z = b.ground ? b.ground(me.x, me.y) : zoneAt(b.layout, me.x, me.y, S);
   if (z !== me.zone) { me.zone = z; b.events.push({ t: b.t, kind: 'zone', by: me.side, zone: z }); }
 }
 
