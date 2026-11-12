@@ -17,7 +17,7 @@ export interface MedalRule {
   better: 'higher' | 'lower';
   /** the value needed for each medal */
   thresholds: Record<Tier, number>;
-  unit: 'm' | 'vsPar' | 'mm' | 'wins' | 'place';
+  unit: 'm' | 'vsPar' | 'mm' | 'wins' | 'place' | 'pts';
 }
 
 export const PLANE_MEDALS: MedalRule = {
@@ -69,13 +69,25 @@ export const MELEE_MEDALS: MedalRule = {
   unit: 'place',
 };
 
-export const MEDAL_RULES: MedalRule[] = [PLANE_MEDALS, DISC_GOLF_MEDALS, SPLIT_MEDALS, ROBOT_MEDALS, MELEE_MEDALS];
+export const TEA_MEDALS: MedalRule = {
+  game: 'tea-dunk',
+  key: 'crinklecut.teaDunk.medal',
+  measure: "each game's total score across three dunks (depth × time, with a bonus for a fragile biscuit)",
+  better: 'higher',
+  // points for a 3-biscuit game; wide bronze, narrower silver, hard gold
+  // Set from scripts/tea-sim.ts: timid play is almost always bronze and never
+  // gold, a skilled player takes gold only sometimes, and holding too long (breaks) costs you.
+  thresholds: { bronze: 320, silver: 800, gold: 1160 },
+  unit: 'pts',
+};
+
+export const MEDAL_RULES: MedalRule[] = [PLANE_MEDALS, DISC_GOLF_MEDALS, SPLIT_MEDALS, ROBOT_MEDALS, MELEE_MEDALS, TEA_MEDALS];
 
 // ---- formatting --------------------------------------------------------------------
 export const fmtVsPar = (d: number) => (d === 0 ? 'E' : d > 0 ? `+${d}` : `−${-d}`);
 /** 1st, 2nd, 3rd, 4th... */
 export const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
-const fmtValue = (r: MedalRule, v: number) => (r.unit === 'm' ? `${v} m` : r.unit === 'mm' ? `${v} mm` : r.unit === 'wins' ? `${v} ${v === 1 ? 'win' : 'wins'}` : r.unit === 'place' ? `${ordinal(v)} place` : fmtVsPar(v));
+const fmtValue = (r: MedalRule, v: number) => (r.unit === 'm' ? `${v} m` : r.unit === 'mm' ? `${v} mm` : r.unit === 'pts' ? `${v} pts` : r.unit === 'wins' ? `${v} ${v === 1 ? 'win' : 'wins'}` : r.unit === 'place' ? `${ordinal(v)} place` : fmtVsPar(v));
 
 /** The band for a medal, e.g. "40–75 m", "100 m+", "+3 to +1", "−2 or better", "within 4 mm". */
 export function bandLabel(r: MedalRule, t: Tier): string {
@@ -107,6 +119,10 @@ export function nextTarget(r: MedalRule, v: number): string | null {
   if (r.unit === 'place') return next === 'gold' ? 'win the melee for gold' : `finish ${ordinal(goal)} or better for ${next}`;
   if (r.unit === 'wins') { const gap = goal - v; return `${gap} more ${gap === 1 ? 'win' : 'wins'} in a row for ${next}`; }
   if (r.better === 'higher') {
+    if (r.unit === 'pts') {
+      const gap = Math.max(1, Math.ceil(goal - v));
+      return `${gap} ${gap === 1 ? 'pt' : 'pts'} more for ${next}`;
+    }
     const gap = Math.max(0.1, Math.ceil((goal - v) * 10) / 10);
     return `${gap.toFixed(1)} m more for ${next}`;
   }
