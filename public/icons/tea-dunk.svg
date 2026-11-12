@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" fill="none" stroke="#2b2d42" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+  <!-- table -->
+  <path d="M6 78h108" />
+  <!-- mug -->
+  <path d="M36 74c-2 0-8-8-8-24 0-6 2-10 8-12h28c6 2 8 6 8 12 0 16-6 24-8 24z" fill="#f3eadc" />
+  <ellipse cx="50" cy="38" rx="18" ry="7" fill="#8a4a18" />
+  <path d="M72 46c10 2 12 16 0 20" />
+  <!-- tea steam -->
+  <path d="M44 28c2-6-2-8 0-14M54 26c2-6-1-9 1-14" stroke="#9aa1ad" stroke-width="3" />
+  <!-- biscuit, slightly soggy at the tip -->
+  <path d="M78 10c8 2 12 8 10 22-6 4-16 4-22 0-2-14 4-22 12-22z" fill="#e6c58a" />
+  <path d="M68 28c4 3 14 4 20 1" fill="#c99555" stroke="none" />
+  <path d="M68 28c4 3 14 4 20 1" />
+  <!-- drip -->
+  <path d="M76 34v8" stroke="#5a2c0c" stroke-width="3" />
+  <circle cx="76" cy="44" r="2.5" fill="#5a2c0c" stroke="none" />
+</svg>

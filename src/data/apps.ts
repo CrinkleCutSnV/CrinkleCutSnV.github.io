@@ -58,4 +58,14 @@ export const apps: AppCard[] = [
     tags: ['Game', 'Autobattler', 'Canvas'],
     status: 'new',
   },
+  {
+    slug: 'tea-dunk',
+    title: 'Tea Dunk',
+    blurb: 'Dunk a biscuit into a mug of tea for as long as you dare. Each of the regulars brings their signature biscuit — pull it out before it breaks.',
+    emoji: '🍵',
+    icon: '/icons/tea-dunk.svg',
+    colour: '#f2b15a',
+    tags: ['Game', 'Timing', 'Canvas'],
+    status: 'new',
+  },
 ];

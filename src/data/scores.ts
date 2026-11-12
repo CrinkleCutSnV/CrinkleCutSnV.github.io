@@ -5,8 +5,9 @@
 //    all pick it up automatically.
 import { HOLES } from '../scripts/disc-golf/physics';
 import { BEST_KEY as SPLIT_BEST, CHARACTERS, bestKeyFor } from '../scripts/split-the-g/physics';
-import { DISC_GOLF_MEDALS, MELEE_MEDALS, PLANE_MEDALS, ROBOT_MEDALS, SPLIT_MEDALS, type MedalRule } from './medals';
+import { DISC_GOLF_MEDALS, MELEE_MEDALS, PLANE_MEDALS, ROBOT_MEDALS, SPLIT_MEDALS, TEA_MEDALS, type MedalRule } from './medals';
 import { BEST_STREAK_KEY, MELEE_BEST_KEY } from '../scripts/robot-wars/keys';
+import { BEST_KEY as TEA_BEST, bestKeyFor as teaBestKey, biscuitFor } from '../scripts/tea-dunk/physics';
 
 export type ScoreFormat =
   | { kind: 'metres'; decimals?: number }
@@ -17,7 +18,9 @@ export type ScoreFormat =
   /** fights won in a row: higher is better */
   | { kind: 'wins' }
   /** a finishing place (1 = won): lower is better */
-  | { kind: 'place'; of: number };
+  | { kind: 'place'; of: number }
+  /** a points total: higher is better */
+  | { kind: 'points' };
 
 export interface ScoreStat {
   key: string; // localStorage key
@@ -106,6 +109,28 @@ export const gameScores: GameScores[] = [
     colour: '#ffadad',
     headline: { key: MELEE_BEST_KEY, label: 'Best finish in a five-robot melee', format: { kind: 'place', of: 5 } },
     medals: MELEE_MEDALS,
+  },
+  {
+    slug: 'tea-dunk',
+    title: 'Tea Dunk',
+    icon: '/icons/tea-dunk.svg',
+    emoji: '🍵',
+    colour: '#f2b15a',
+    headline: { key: TEA_BEST, label: 'Best three-biscuit total', format: { kind: 'points' } },
+    medals: TEA_MEDALS,
+    breakdown: {
+      title: 'Best dunk with each regular',
+      stats: CHARACTERS.map((c) => {
+        const b = biscuitFor(c);
+        return {
+          key: teaBestKey(c.id),
+          label: c.name,
+          badge: c.name.replace(/[^A-Za-z]/g, '').charAt(0),
+          format: { kind: 'points' } as ScoreFormat,
+          note: `Signature: ${b.name}`,
+        };
+      }),
+    },
   },
 ];
 

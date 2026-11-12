@@ -1,7 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
 import { gameScores } from '../../data/scores';
-import { TIERS, TIER_NAME, bandLabel } from '../../data/medals';
+import { TEA_MEDALS, TIERS, TIER_NAME, bandLabel } from '../../data/medals';
 const withMedals = gameScores.filter((g) => g.medals);
 ---
 <Base title="My best scores · CrinkleCutSnV's playground" description="Your best scores from every game in CrinkleCutSnV's playground, saved in this browser.">
@@ -96,7 +96,7 @@ const withMedals = gameScores.filter((g) => g.medals);
   import { allScoreKeys } from '../../data/scores';
   import type { ScoreFormat } from '../../data/scores';
   import { clearRecord, formatDate, readDate, readNumber, scoreName, vsPar, vsParWords } from '../../scripts/scores';
-  import { MEDAL_RULES, TIERS, TIER_NAME, ordinal, tierRank } from '../../data/medals';
+  import { MEDAL_RULES, TEA_MEDALS, TIERS, TIER_NAME, ordinal, tierRank } from '../../data/medals';
   import { readMedal, readMedalDate } from '../../scripts/medals';
 
   function renderMedals() {
@@ -158,6 +158,9 @@ const withMedals = gameScores.filter((g) => g.medals);
         } else if (fmt.kind === 'wins') {
           value.textContent = `${v} ${v === 1 ? 'win' : 'wins'}`;
           if (extra) extra.textContent = headline ? (v >= 3 ? 'Champion streak!' : v === 0 ? 'Still looking for a first win' : 'in a row') : '';
+        } else if (fmt.kind === 'points') {
+          value.textContent = `${v} ${v === 1 ? 'pt' : 'pts'}`;
+          if (extra) extra.textContent = headline ? (v >= TEA_MEDALS.thresholds.gold ? 'Gold-medal dunking!' : '') : '';
         } else {
           value.textContent = headline ? `${v} ${v === 1 ? 'throw' : 'throws'}` : String(v);
           if (extra) {

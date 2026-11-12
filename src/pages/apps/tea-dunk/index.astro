@@ -1,0 +1,29 @@
+---
+import Base from '../../../layouts/Base.astro';
+import TeaDunkGame from '../../../components/TeaDunkGame.astro';
+import { TEA_MEDALS } from '../../../data/medals';
+const t = TEA_MEDALS.thresholds;
+---
+<Base title="Tea Dunk · CrinkleCutSnV's playground" description="Dunk a biscuit into a mug of tea for as long as you dare. Pull it out before it breaks, and score for depth and nerve.">
+  <section class="wrap game-page">
+    <div class="title-row">
+      <h1>Tea Dunk 🍵</h1>
+      <a class="back" href="/">← All apps</a>
+    </div>
+    <TeaDunkGame />
+    <details class="how">
+      <summary>How it works</summary>
+      <p>A mug of tea, a biscuit, and a test of nerve. Press and hold anywhere on the table (or hold Space) to lower the biscuit, and let go to lift it out. The longer and deeper you dunk, the more you score — but leave it too long and the soggy end snaps off into the tea. That’s a miss, and it doesn’t count as a best.</p>
+      <p>Each game is three dunks. The table picks one of the Split the G regulars at random, and they always bring their signature biscuit: Maureen a plain digestive, Big Declan a sturdy Hobnob, Nervous Nigel a fragile rich tea, Auntie Dot a custard cream, Walter the Walrus a big chocolate digestive, and Professor Pip a ginger nut. Fragile biscuits don’t last long, but a brave dunk with one scores well. Watch the biscuit: it darkens, sags, drops crumbs and shows a crack before it goes.</p>
+      <p>Your score for each dunk is how deep it went, multiplied by how long it was in, with a bonus for a fragile biscuit. The three dunks are added up, and that total wins a medal: bronze from {t.bronze} pts, silver from {t.silver} pts, gold from {t.gold} pts. Gold is a hard one — you need three brave, careful dunks.</p>
+    </details>
+  </section>
+</Base>
+<style>
+  .game-page { padding-bottom: 2rem; }
+  .title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin: .25rem 0 1rem; }
+  .back { font-weight: 700; text-decoration: none; }
+  .how { margin-top: 1.5rem; max-width: 70ch; line-height: 1.5; }
+  .how summary { font-weight: 800; cursor: pointer; }
+</style>

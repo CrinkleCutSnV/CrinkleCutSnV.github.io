@@ -34,14 +34,16 @@ for (const [card, name] of [[plane, 'Paper Plane Throw'], [golf, 'Arcade Disc Go
   check(await card.locator(`[data-empty] a[href="/apps/${name === 'Paper Plane Throw' ? 'paper-plane' : 'disc-golf'}/"]`).count() === 1, `${name}: empty state links to the game`);
 }
 const medalTxt = async (card) => (await txt(card.locator('[data-medals]'))).replace(/★ /g, '');
-check(/No medal yet/.test(await medalTxt(plane)) && await page.locator('[data-medals] .medal--none').count() === 15 && await page.locator('[data-medals] li.is-won').count() === 0, 'no medals yet: all fifteen medals are greyed outlines');
+check(/No medal yet/.test(await medalTxt(plane)) && await page.locator('[data-medals] .medal--none').count() === 18 && await page.locator('[data-medals] li.is-won').count() === 0, 'no medals yet: all eighteen medals are greyed outlines');
 check(/Bronze 40–75 m Silver 75–100 m Gold 100 m\+/.test(await medalTxt(plane)), `plane medal bands on the page: "${await medalTxt(plane)}"`);
 check(/Bronze \+3 to \+1 Silver E to −1 Gold −2 or better/.test(await medalTxt(golf)), `disc golf medal bands on the page: "${await medalTxt(golf)}"`);
 check(/Bronze 1 win Silver 2 wins Gold 3\+ wins/.test(await medalTxt(page.locator('[data-game="robot-wars"]'))), `robot medal bands on the page: "${await medalTxt(page.locator('[data-game="robot-wars"]'))}"`);
 check(await page.locator('[data-game="robot-wars"] [data-empty] a[href="/apps/robot-wars/"]').count() === 1, 'Robot Rumble: empty state links to the game');
 check(/Bronze 3rd place Silver 2nd place Gold Win the melee/.test(await medalTxt(page.locator('[data-game="robot-melee"]'))), `melee medal bands on the page: "${await medalTxt(page.locator('[data-game="robot-melee"]'))}"`);
 check(await page.locator('[data-game="robot-melee"] [data-empty] a[href="/apps/robot-melee/"]').count() === 1, 'Robot Rumble Melee: empty state links to the game');
-check(/Gold in every game: 0 of 5/.test(await txt(page.locator('[data-gold-line]'))), 'progress line: "Gold in every game: 0 of 5"');
+check(/Bronze 320–800 pts Silver 800–1160 pts Gold 1160 pts\+/.test(await medalTxt(page.locator('[data-game="tea-dunk"]'))), `tea dunk medal bands on the page: "${await medalTxt(page.locator('[data-game="tea-dunk"]'))}"`);
+check(await page.locator('[data-game="tea-dunk"] [data-empty] a[href="/apps/tea-dunk/"]').count() === 1, 'Tea Dunk: empty state links to the game');
+check(/Gold in every game: 0 of 6/.test(await txt(page.locator('[data-gold-line]'))), 'progress line: "Gold in every game: 0 of 6"');
 check(/in this browser on this device only/.test(await txt(page.locator('[data-note]'))), 'note: saved in this browser on this device only');
 await page.screenshot({ path: `${OUT}/scores-02-empty.png`, fullPage: true });
 
@@ -74,25 +76,29 @@ check(/Hole 3: King of the Hill Par 3 · set on 23 Oct 2026 2 Birdie \(−1\)/.t
 check(/Best medal: Silver set on 23 Oct 2026/.test(await medalTxt(plane)) && await plane.locator('li.is-won').count() === 2 && await plane.locator('li.is-best[data-tier="silver"]').count() === 1 && await plane.locator('li[data-tier="gold"] .medal--none').count() === 1,
   'plane: best medal Silver (dated), bronze and silver lit, gold still a greyed outline');
 check(/Best medal: Gold set on 20 Oct 2026/.test(await medalTxt(golf)) && await golf.locator('li.is-won').count() === 3, 'disc golf: best medal Gold, all three lit');
-check(/Gold in every game: 1 of 5/.test(await txt(page.locator('[data-gold-line]'))), `progress line: "${await txt(page.locator('[data-gold-line]'))}"`);
+check(/Gold in every game: 1 of 6/.test(await txt(page.locator('[data-gold-line]'))), `progress line: "${await txt(page.locator('[data-gold-line]'))}"`);
 await page.screenshot({ path: `${OUT}/scores-01-desktop-seeded.png`, fullPage: true });
 await page.locator('[data-game="paper-plane"] [data-medals]').screenshot({ path: `${OUT}/scores-05-medals-panel.png` });
 await page.evaluate(() => localStorage.setItem('crinklecut.paperPlane.medal', 'gold'));
 await page.reload();
-check(/Gold in every game: 2 of 5/.test(await txt(page.locator('[data-gold-line]'))) && !/Clean sweep/.test(await txt(page.locator('[data-gold-line]'))), 'gold in two of four: "2 of 5", no sweep yet');
+check(/Gold in every game: 2 of 6/.test(await txt(page.locator('[data-gold-line]'))) && !/Clean sweep/.test(await txt(page.locator('[data-gold-line]'))), 'gold in two of six: "2 of 6", no sweep yet');
 await page.evaluate(() => localStorage.setItem('crinklecut.splitTheG.medal', 'gold'));
 await page.reload();
-check(/Gold in every game: 3 of 5/.test(await txt(page.locator('[data-gold-line]'))) && !/Clean sweep/.test(await txt(page.locator('[data-gold-line]'))), 'gold in three of four: "3 of 5", no sweep yet');
+check(/Gold in every game: 3 of 6/.test(await txt(page.locator('[data-gold-line]'))) && !/Clean sweep/.test(await txt(page.locator('[data-gold-line]'))), 'gold in three of six: "3 of 6", no sweep yet');
 await page.evaluate(() => { localStorage.setItem('crinklecut.robotWars.medal', 'gold'); localStorage.setItem('crinklecut.robotWars.bestStreak', '4'); });
 await page.reload();
-check(/Gold in every game: 4 of 5/.test(await txt(page.locator('[data-gold-line]'))) && !/Clean sweep/.test(await txt(page.locator('[data-gold-line]'))), 'gold in four of five: "4 of 5", no sweep yet');
+check(/Gold in every game: 4 of 6/.test(await txt(page.locator('[data-gold-line]'))) && !/Clean sweep/.test(await txt(page.locator('[data-gold-line]'))), 'gold in four of six: "4 of 6", no sweep yet');
 await page.evaluate(() => { localStorage.setItem('crinklecut.robotMelee.medal', 'silver'); localStorage.setItem('crinklecut.robotMelee.bestPlace', '2'); });
 await page.reload();
-check(/2nd of 5/.test(await txt(page.locator('[data-game="robot-melee"]'))) && /On the podium/.test(await txt(page.locator('[data-game="robot-melee"]'))) && /4 of 5/.test(await txt(page.locator('[data-gold-line]'))), `Melee card shows a 2nd place and silver isn't gold: "${(await txt(page.locator('[data-game="robot-melee"]'))).slice(0, 140)}"`);
+check(/2nd of 5/.test(await txt(page.locator('[data-game="robot-melee"]'))) && /On the podium/.test(await txt(page.locator('[data-game="robot-melee"]'))) && /4 of 6/.test(await txt(page.locator('[data-gold-line]'))), `Melee card shows a 2nd place and silver isn't gold: "${(await txt(page.locator('[data-game="robot-melee"]'))).slice(0, 140)}"`);
 await page.evaluate(() => { localStorage.setItem('crinklecut.robotMelee.medal', 'gold'); localStorage.setItem('crinklecut.robotMelee.bestPlace', '1'); });
 await page.reload();
-check(/Gold in every game: 5 of 5 Clean sweep!/.test(await txt(page.locator('[data-gold-line]'))), 'gold in all five: "5 of 5 Clean sweep!"');
+check(/Gold in every game: 5 of 6/.test(await txt(page.locator('[data-gold-line]'))) && !/Clean sweep/.test(await txt(page.locator('[data-gold-line]'))), 'gold in five of six: "5 of 6", no sweep yet');
 check(/1st of 5/.test(await txt(page.locator('[data-game="robot-melee"]'))) && /Last robot standing!/.test(await txt(page.locator('[data-game="robot-melee"]'))), `Melee card shows the win: "${(await txt(page.locator('[data-game="robot-melee"]'))).slice(0, 140)}"`);
+await page.evaluate(() => { localStorage.setItem('crinklecut.teaDunk.medal', 'gold'); localStorage.setItem('crinklecut.teaDunk.best', '1280'); });
+await page.reload();
+check(/Gold in every game: 6 of 6 Clean sweep!/.test(await txt(page.locator('[data-gold-line]'))), 'gold in all six: "6 of 6 Clean sweep!"');
+check(/1280 pts/.test(await txt(page.locator('[data-game="tea-dunk"]'))) && /Gold-medal dunking/.test(await txt(page.locator('[data-game="tea-dunk"]'))), `Tea Dunk card shows the gold score: "${(await txt(page.locator('[data-game="tea-dunk"]'))).slice(0, 160)}"`);
 check(/4 wins/.test(await txt(page.locator('[data-game="robot-wars"]'))), `Robot Rumble card shows the streak: "${(await txt(page.locator('[data-game="robot-wars"]'))).slice(0, 120)}"`);
 await page.evaluate(() => localStorage.removeItem('crinklecut.splitTheG.medal'));
 await page.evaluate(() => localStorage.setItem('crinklecut.paperPlane.medal', 'silver'));
@@ -119,7 +125,7 @@ await page.click('[data-reset]');
 await page.locator('[data-confirm]').screenshot({ path: `${OUT}/scores-04-reset-confirm.png` });
 await page.click('[data-reset-yes]');
 const left = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('crinklecut.')));
-check(left.length === 0 && /0 of 5/.test(await txt(page.locator('[data-gold-line]'))) && await page.locator('[data-medals] li.is-won').count() === 0, `"Yes, reset them" clears every score, medal and date (left: ${JSON.stringify(left)})`);
+check(left.length === 0 && /0 of 6/.test(await txt(page.locator('[data-gold-line]'))) && await page.locator('[data-medals] li.is-won').count() === 0, `"Yes, reset them" clears every score, medal and date (left: ${JSON.stringify(left)})`);
 check(await plane.locator('[data-empty]').isVisible() && await golf.locator('[data-empty]').isVisible() && await page.locator('[data-reset-done]').isVisible(), 'page shows the empty state again, with a "reset" message');
 
 // --- the games save a date with a new record (and keep the old key format) ---

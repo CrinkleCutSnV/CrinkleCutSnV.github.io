@@ -18,7 +18,9 @@
     "check:robots": "esbuild scripts/robots-sim.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/robots-sim.mjs --format=esm && node node_modules/.cache/robots-sim.mjs",
     "test:robots": "node scripts/robots-tests.mjs",
     "check:melee": "esbuild scripts/melee-sim.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/melee-sim.mjs --format=esm && node node_modules/.cache/melee-sim.mjs",
-    "test:melee": "node scripts/melee-tests.mjs"
+    "test:melee": "node scripts/melee-tests.mjs",
+    "check:tea": "esbuild scripts/tea-sim.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/tea-sim.mjs --format=esm && node node_modules/.cache/tea-sim.mjs",
+    "test:tea": "npm run check:tea && node scripts/tea-tests.mjs"
   },
   "dependencies": {
     "astro": "^5.18.2",

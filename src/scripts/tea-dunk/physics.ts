@@ -247,6 +247,8 @@ export interface Dunk {
   soak: number;
   peakSoak: number;
   timeWet: number;
+  /** deepest the biscuit has been this dunk, for the wet stain */
+  peakDepth: number;
   /** ∫ max(0, depth) dt, in seconds */
   depthIntegral: number;
   broken: boolean;
@@ -274,6 +276,7 @@ export function pourDunk(char: Character, seed: number): Dunk {
     soak: 0,
     peakSoak: 0,
     timeWet: 0,
+    peakDepth: 0,
     depthIntegral: 0,
     broken: false,
     score: 0,
@@ -336,6 +339,7 @@ export function step(d: Dunk, dt: number) {
     d.soak = Math.min(1.25, d.soak + soakRate(d) * dt);
     d.peakSoak = Math.max(d.peakSoak, d.soak);
     d.timeWet += dt;
+    d.peakDepth = Math.max(d.peakDepth, d.depth);
     d.depthIntegral += d.depth * dt;
     d.clearT = 0;
     if (d.soak >= 1) {
