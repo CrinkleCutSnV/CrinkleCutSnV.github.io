@@ -73,6 +73,13 @@ export function clipToMug(ctx: Ctx, v: TeaView) {
   ctx.clip();
 }
 
+/** The oval of tea, so crumbs and droplets stay in the cup rather than on the ceramic. */
+export function clipToTea(ctx: Ctx, v: TeaView) {
+  ctx.beginPath();
+  ctx.ellipse(v.mugX, v.teaY, v.mugR * 0.86, v.mugR * 0.22, 0, 0, Math.PI * 2);
+  ctx.clip();
+}
+
 // ---- kitchen ---------------------------------------------------------------------------
 export function drawKitchen(ctx: Ctx, v: TeaView, t: number) {
   const { w, h, tableY } = v;
@@ -619,12 +626,30 @@ export function drawCrumbsAndDrips(ctx: Ctx, v: TeaView, d: Dunk, t: number) {
   if (warn === 'crumbs' || warn === 'crack' || warn === 'critical' || d.broken) {
     const n = d.broken ? 14 : warn === 'critical' ? 9 : warn === 'crack' ? 6 : 5;
     for (let i = 0; i < n; i++) {
-      const life = (t * 0.6 + i * 0.37 + seed * 0.01) % 1.2;
-      if (life > 1) continue;
-      const sx = pose.topX + Math.sin(seed + i * 2.1) * pose.wid * 0.55;
-      const sy = Math.min(v.teaY - 4, pose.topY + pose.len * (0.45 + (i % 5) * 0.1));
-      const x = sx + Math.sin(seed + i) * 12 * life;
-      const y = sy + life * life * 36 + life * 10;
+      const ang = seed + i * 2.1;
+      let x: number, y: number;
+      if (d.broken) {
+        // drop from the snapped biscuit into the tea and stay there
+        const startX = pose.topX + Math.sin(ang) * pose.wid * 0.45;
+        const startY = Math.min(v.teaY - 6, pose.topY + pose.len * (0.5 + (i % 4) * 0.06));
+        const destX = v.mugX + Math.sin(ang) * v.mugR * 0.62 * ((i % 5) + 1) / 5;
+        const destY = v.teaY + Math.cos(seed * 0.7 + i) * v.mugR * 0.12 * ((i % 3) + 1) / 3;
+        const eased = Math.min(1, d.fall * 1.15 + (i % 7) * 0.03);
+        x = startX + (destX - startX) * eased;
+        y = startY + (destY - startY) * eased * eased;
+      } else {
+        const life = (t * 0.6 + i * 0.37 + seed * 0.01) % 1.2;
+        if (life > 1) continue;
+        const sx = pose.topX + Math.sin(ang) * pose.wid * 0.55;
+        const sy = Math.min(v.teaY - 4, pose.topY + pose.len * (0.45 + (i % 5) * 0.1));
+        x = sx + Math.sin(seed + i) * 12 * life;
+        y = sy + life * life * 36 + life * 10;
+        if (y > v.teaY) {
+          const k = Math.min(1, (y - v.teaY) / 28);
+          x = sx + (v.mugX + Math.sin(ang) * v.mugR * 0.5 - sx) * k;
+          y = v.teaY + Math.min(v.mugR * 0.14, (y - v.teaY) * 0.35);
+        }
+      }
       ctx.fillStyle = d.biscuit.edge;
       ctx.strokeStyle = INK;
       ctx.lineWidth = 1;
@@ -656,6 +681,11 @@ export function drawSplash(ctx: Ctx, v: TeaView, d: Dunk) {
   const t = d.breakT;
   const n = 16;
   ctx.save();
+  // spray may leap into the air, but falling drops stay in the tea, not on the mug
+  ctx.beginPath();
+  ctx.rect(-2, -2, v.w + 4, v.teaY + 2);
+  ctx.ellipse(v.mugX, v.teaY, v.mugR * 0.86, v.mugR * 0.22, 0, 0, Math.PI * 2);
+  ctx.clip();
   for (let i = 0; i < n; i++) {
     const ang = (i / n) * Math.PI - Math.PI / 2 + Math.sin(d.seed + i) * 0.2;
     const speed = 80 + (i % 5) * 30;
@@ -667,8 +697,10 @@ export function drawSplash(ctx: Ctx, v: TeaView, d: Dunk) {
     ctx.ellipse(x, y, 3.5, 5, ang, 0, Math.PI * 2);
     ctx.fill();
   }
-  // a little "PLOP!"
+  ctx.restore();
+  // a little "PLOP!" — kept outside the tea clip so it can sit beside the mug
   if (t > 0.08 && t < 0.7) {
+    ctx.save();
     ctx.globalAlpha = t < 0.25 ? t / 0.25 : 1 - (t - 0.25) / 0.45;
     ctx.fillStyle = INK;
     ctx.font = `900 ${Math.round(v.mugR * 0.42)}px ${FONT}`;
@@ -676,8 +708,8 @@ export function drawSplash(ctx: Ctx, v: TeaView, d: Dunk) {
     ctx.translate(v.mugX + v.mugR * 0.9, v.teaY - v.mugR * 0.8);
     ctx.rotate(-0.15);
     ctx.fillText('PLOP!', 0, 0);
+    ctx.restore();
   }
-  ctx.restore();
 }
 
 // ---- the dunker ------------------------------------------------------------------------
@@ -767,12 +799,16 @@ export function drawScene(ctx: Ctx, v: TeaView, c: Character, d: Dunk | null, t:
   ctx.ellipse(v.mugX, v.mugY - v.mugH, v.mugR * 1.02, v.mugR * 0.28, 0, 0, Math.PI * 2);
   ctx.clip();
   drawTeaSurface(ctx, v, d, t);
-  if (d) {
-    drawBiscuit(ctx, v, d, t);
-    drawCrumbsAndDrips(ctx, v, d, t);
-  }
+  if (d) drawBiscuit(ctx, v, d, t);
   ctx.restore();
-  if (d) drawSplash(ctx, v, d);
+  // crumbs and droplets belong in the tea, not on the front of the mug
+  if (d) {
+    ctx.save();
+    clipToTea(ctx, v);
+    drawCrumbsAndDrips(ctx, v, d, t);
+    ctx.restore();
+    drawSplash(ctx, v, d);
+  }
   drawSteam(ctx, v, t, d && d.depth > 0 ? 0.4 : 0);
   drawHandOnBiscuit(ctx, c, hand, v.charR);
 }
